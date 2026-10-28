@@ -1,0 +1,180 @@
+generator client {
+ provider = "prisma-client-js"
+}
+datasource db {
+ provider = "postgresql"
+}
+model User {
+ id String @id @default(cuid())
+ email String @unique
+ name String
+ password String
+ createdAt DateTime @default(now())
+ settings Json @default("{}")
+ sessions Session[]
+ identities Identity[]
+ repos Repository[]
+ issues Issue[]
+ runs Run[]
+ messages Message[]
+ usage Usage[]
+ proposals Proposal[]
+ applications Application[]
+ resets Reset[]
+ jobs Job[]
+}
+model Session {
+ id String @id
+ userId String
+ user User @relation(fields:[userId], references:[id], onDelete:Cascade)
+ expiresAt DateTime
+}
+model Reset {
+ id String @id
+ userId String
+ user User @relation(fields:[userId],references:[id],onDelete:Cascade)
+ expiresAt DateTime
+}
+model Identity {
+ id String @id @default(cuid())
+ userId String
+ user User @relation(fields:[userId], references:[id], onDelete:Cascade)
+ login String
+ token String
+ active Boolean @default(true)
+ status String @default("connected")
+ syncedAt DateTime?
+ createdAt DateTime @default(now())
+ @@unique([userId,login])
+}
+model Repository {
+ id String @id @default(cuid())
+ userId String
+ user User @relation(fields:[userId],references:[id],onDelete:Cascade)
+ identityId String
+ fullName String
+ defaultBranch String @default("main")
+ testCommand String @default("")
+ stats Json @default("{}")
+ health String @default("connected")
+ createdAt DateTime @default(now())
+ @@unique([userId,fullName])
+}
+model Issue {
+ id String @id @default(cuid())
+ userId String
+ user User @relation(fields:[userId],references:[id],onDelete:Cascade)
+ identityId String
+ repo String
+ number Int
+ title String
+ body String @default("")
+ labels Json @default("[]")
+ assignees Json @default("[]")
+ state String @default("open")
+ status String @default("ready")
+ url String
+ updatedAt DateTime @updatedAt
+ createdAt DateTime @default(now())
+ @@unique([userId,repo,number])
+}
+model Run {
+ id String @id @default(cuid())
+ userId String
+ user User @relation(fields:[userId],references:[id],onDelete:Cascade)
+ identityId String
+ repo String
+ issueIds Json
+ title String
+ status String @default("queued")
+ branch String @unique
+ baseSha String?
+ headSha String?
+ approvedSha String?
+ feedback String @default("")
+ plan String @default("")
+ artifacts Json @default("{}")
+ diff String @default("")
+ logs String @default("")
+ tests String @default("")
+ error String?
+ prNumber Int?
+ prUrl String?
+ mode String @default("approval")
+ attempts Int @default(0)
+ createdAt DateTime @default(now())
+ startedAt DateTime?
+ finishedAt DateTime?
+ updatedAt DateTime @updatedAt
+}
+model Job {
+ id String @id @default(cuid())
+ userId String
+ user User @relation(fields:[userId],references:[id],onDelete:Cascade)
+ kind String
+ key String @unique
+ payload Json
+ status String @default("queued")
+ attempts Int @default(0)
+ availableAt DateTime @default(now())
+ leaseUntil DateTime?
+ error String?
+ createdAt DateTime @default(now())
+ updatedAt DateTime @updatedAt
+ @@index([status,availableAt])
+}
+model Message {
+ id String @id @default(cuid())
+ userId String
+ user User @relation(fields:[userId],references:[id],onDelete:Cascade)
+ conversation String @default("default")
+ role String
+ content String
+ activity Json @default("[]")
+ createdAt DateTime @default(now())
+}
+model Usage {
+ id String @id @default(cuid())
+ userId String
+ user User @relation(fields:[userId],references:[id],onDelete:Cascade)
+ runId String?
+ provider String @default("deepseek")
+ purpose String
+ model String
+ input Int
+ cached Int @default(0)
+ output Int
+ total Int
+ createdAt DateTime @default(now())
+ @@index([userId,runId])
+}
+model Proposal {
+ id String @id @default(cuid())
+ userId String
+ user User @relation(fields:[userId],references:[id],onDelete:Cascade)
+ identityId String
+ repo String
+ entries Json
+ state String @default("preview")
+ createdAt DateTime @default(now())
+}
+model Application {
+ id String @id @default(cuid())
+ userId String
+ user User @relation(fields:[userId],references:[id],onDelete:Cascade)
+ identityId String
+ repo String
+ number Int
+ title String
+ draft String
+ wave String @default("")
+ complexity String @default("moderate")
+ languages Json @default("[]")
+ status String @default("pending")
+ createdAt DateTime @default(now())
+}
+model RateLimit {
+ key String @id
+ count Int @default(1)
+ expiresAt DateTime
+}

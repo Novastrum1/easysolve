@@ -1,0 +1,18 @@
+{
+  "name": "EasySolve",
+  "image": "mcr.microsoft.com/devcontainers/typescript-node:1-24-bookworm",
+  "features": { "ghcr.io/devcontainers/features/docker-in-docker:2": {} },
+  "forwardPorts": [3000],
+  "portsAttributes": {
+    "3000": {
+      "label": "EasySolve private preview",
+      "onAutoForward": "notify",
+      "visibility": "private"
+    }
+  },
+  "postCreateCommand": "npm ci && npm run setup",
+  "remoteUser": "node",
+  "customizations": {
+    "vscode": { "extensions": ["Prisma.prisma", "dbaeumer.vscode-eslint"] }
+  }
+}

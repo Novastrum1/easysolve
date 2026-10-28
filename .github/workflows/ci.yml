@@ -1,0 +1,48 @@
+name: Verify EasySolve
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  application:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: easysolve
+          POSTGRES_PASSWORD: ci-disposable-password
+          POSTGRES_DB: easysolve
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U easysolve"
+          --health-interval 3s
+          --health-timeout 3s
+          --health-retries 20
+    env:
+      DATABASE_URL: postgresql://easysolve:ci-disposable-password@localhost:5432/easysolve
+      APP_URL: http://localhost:3000
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run db:generate
+      - run: npm run db:migrate
+      - run: docker build -t easysolve-sandbox:local sandbox
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run test:integration
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:browser
+      - run: npm run build
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: browser-diagnostics
+          path: test-results/

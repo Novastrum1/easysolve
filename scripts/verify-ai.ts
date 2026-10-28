@@ -1,0 +1,28 @@
+import 'dotenv/config';
+import {writeFile} from 'node:fs/promises';
+import {db} from '../lib/db';
+import {ai} from '../lib/ai';
+import {chat} from '../lib/chat';
+import {chatTools} from '../lib/chat-tools';
+import {analyzeIssue,draftApplication} from '../lib/issue-analysis';
+import {AIProviderError,deepseekConfig} from '../lib/providers/deepseek';
+import {Sandbox} from '../worker/sandbox';
+const report:{provider:string;model:string;at:string;workflows:{name:string;status:string;detail?:string}[];usage:unknown[];error?:string}={provider:'deepseek',model:deepseekConfig().model,at:new Date().toISOString(),workflows:[],usage:[]};
+let userId='';const sandbox=new Sandbox(`live-${crypto.randomUUID()}`);let sandboxCreated=false;
+async function step(name:string,action:()=>Promise<void>){try{await action();report.workflows.push({name,status:'verified'});console.log(`${name}: verified`);}catch(error){report.workflows.push({name,status:'failed',detail:error instanceof AIProviderError?error.code:'VERIFICATION_FAILED'});throw error;}}
+try{
+ if(!process.env.DEEPSEEK_API_KEY)throw new AIProviderError('AI_SETUP','DEEPSEEK_API_KEY is not available to this process.');
+ userId=(await db.user.create({data:{email:`live-deepseek-${crypto.randomUUID()}@example.test`,name:'Live verification fixture',password:'no-login-test-fixture'}})).id;
+ await step('streaming connection and usage receipt',async()=>{const text=await ai(userId,'connection_verification','Reply exactly EASYSOLVE_OK.','Return the requested marker only.');if(!text.includes('EASYSOLVE_OK'))throw Error('Unexpected response');});
+ const issue={repo:'local/verification-fixture',number:1,title:'Correct arithmetic and add tests',body:'sum(2,3) should return 5. Existing code incorrectly subtracts. Add a node:test regression test.'};
+ await db.issue.create({data:{userId,identityId:'local-fixture',...issue,url:'https://example.test/fixture',status:'ready'}});
+ await step('persistent chat and issue-query tool',async()=>{const result=await chat(userId,'Use query_issues to list my ready workspace issues. Do not use any other tool.');if(!(result.activity as any[]).some(a=>a.label==='Queried your issues'))throw Error('Query tool was not called');});
+ await step('GitHub-write confirmation gate',async()=>{const result=await chat(userId,'Prepare a start_run for the ready issue. Do not execute it; request confirmation.');if(!(result.activity as any[]).some(a=>a.type==='confirmation'&&a.action==='start_run'))throw Error('No confirmation preview');if(await db.run.count({where:{userId}})!==0)throw Error('Unconfirmed run was created');});
+ await step('issue analysis',async()=>{if((await analyzeIssue(userId,issue)).length<40)throw Error('Empty analysis');});
+ await step('editable application draft',async()=>{if((await draftApplication(userId,issue,'I have written JavaScript unit tests.')).length<40)throw Error('Empty draft');});
+ await step('coding-agent planning',async()=>{if((await ai(userId,'plan',JSON.stringify(issue),'Create a concise implementation and test plan only.')).length<30)throw Error('Empty plan');});
+ await sandbox.create();sandboxCreated=true;
+ await step('code generation in isolated sandbox',async()=>{const raw=await ai(userId,'coding','Create a CommonJS module exporting a difference(a,b) function. Return JSON {"code":string}.','Return only valid JSON with complete code; no markdown.');const code=JSON.parse(raw.replace(/^```(?:json)?\s*|\s*```$/g,'')).code;if(typeof code!=='string')throw Error('Invalid code');await sandbox.op({type:'write',files:{'difference.cjs':code,'difference.test.cjs':"const {test}=require('node:test');const assert=require('node:assert/strict');const {difference}=require('./difference.cjs');test('difference',()=>assert.equal(difference(8,3),5));"}});const output=JSON.parse(await sandbox.op({type:'test',command:'node --test difference.test.cjs'}));if(output.exitCode!==0)throw Error('Generated code did not pass actual test');});
+ await step('repair from actual failing test output',async()=>{await sandbox.op({type:'write',files:{'sum.cjs':'exports.sum=(a,b)=>a-b;','sum.test.cjs':"const {test}=require('node:test');const assert=require('node:assert/strict');const {sum}=require('./sum.cjs');test('sum',()=>assert.equal(sum(2,3),5));"}});const failed=JSON.parse(await sandbox.op({type:'test',command:'node --test sum.test.cjs'}));if(failed.exitCode===0)throw Error('Fixture did not fail');const raw=await ai(userId,'repair',JSON.stringify({source:'exports.sum=(a,b)=>a-b;',actualTestOutput:failed}),'Repair the CommonJS sum(a,b) module. Return ONLY JSON {"code":string}, no markdown. Do not claim tests ran.');const code=JSON.parse(raw.replace(/^```(?:json)?\s*|\s*```$/g,'')).code;await sandbox.op({type:'write',files:{'sum.cjs':code}});const repaired=JSON.parse(await sandbox.op({type:'test',command:'node --test sum.test.cjs'}));if(repaired.exitCode!==0)throw Error('Repair did not pass actual test');});
+}catch(error){report.error=error instanceof AIProviderError?`${error.code}: ${error.message}`:'Live workflow verification did not complete; inspect stage results.';console.log(report.error);process.exitCode=1;}
+finally{if(userId){report.usage=await db.usage.findMany({where:{userId},select:{provider:true,model:true,purpose:true,input:true,cached:true,output:true,total:true}});await db.user.delete({where:{id:userId}});}if(sandboxCreated)await sandbox.destroy();await writeFile('docs/deepseek-live-verification.json',JSON.stringify(report,null,2)+'\n');await db.$disconnect();console.log('Safe verification report: docs/deepseek-live-verification.json. No GitHub writes were performed.');}

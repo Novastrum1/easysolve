@@ -1,0 +1,51 @@
+{
+  "name": "easysolve",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev --hostname 0.0.0.0",
+    "worker": "tsx watch worker/index.ts",
+    "start:all": "concurrently -k 'npm:dev' 'npm:worker'",
+    "build": "next build",
+    "start": "next start --hostname 0.0.0.0",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "db:generate": "prisma generate",
+    "db:migrate": "prisma migrate deploy",
+    "db:seed": "tsx prisma/seed.ts",
+    "setup": "node scripts/setup.mjs",
+    "worker:start": "tsx worker/index.ts",
+    "test:browser": "playwright test",
+    "test:integration": "vitest run --config vitest.integration.config.ts",
+    "doctor": "tsx scripts/doctor.ts",
+    "format": "prettier --write app components lib worker tests scripts docs README.md",
+    "ai:verify": "tsx scripts/verify-ai.ts"
+  },
+  "dependencies": {
+    "@prisma/adapter-pg": "^7.10.1",
+    "@prisma/client": "^7.10.1",
+    "bcryptjs": "^3.0.2",
+    "concurrently": "^9.2.1",
+    "dotenv": "^17.2.3",
+    "lucide-react": "^0.468.0",
+    "next": "^16.0.0",
+    "openai": "^6.0.0",
+    "pg": "^8.16.3",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "zod": "^4.1.12"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.56.1",
+    "@types/node": "^24.10.0",
+    "@types/pg": "^8.15.6",
+    "@types/react": "^19.2.2",
+    "@types/react-dom": "^19.2.2",
+    "prettier": "^3.9.10",
+    "prisma": "^7.10.1",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3",
+    "vitest": "^5.0.5"
+  },
+  "type": "module"
+}
