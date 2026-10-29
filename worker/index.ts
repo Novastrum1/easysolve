@@ -16,6 +16,7 @@ async function tick() {
   const identities = await db.identity.findMany({
     where: {
       active: true,
+      user: { suspendedAt: null },
       OR: [
         { syncedAt: null },
         { syncedAt: { lt: new Date(Date.now() - 15 * 60000) } },
@@ -32,6 +33,7 @@ async function tick() {
         { identityId: i.id },
       );
   const repositories = await db.repository.findMany({
+    where: { user: { suspendedAt: null } },
     include: { user: true },
   });
   for (const r of repositories)
@@ -68,6 +70,8 @@ async function main() {
           .catch(() => {});
       }, 30000);
       try {
+        const account = await db.user.findUniqueOrThrow({ where: { id: job.userId } });
+        if (account.suspendedAt) throw new Error("Account suspended");
         const p = job.payload as {
           runId: string;
           identityId: string;

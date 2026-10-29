@@ -10,6 +10,7 @@ import { GitHub, github } from "../github";
 import { settingsSchema } from "../policy";
 import { encrypt, hash, HttpError, session } from "../security";
 import type { RouteContext } from "./types";
+import { parseAuthInput, passwordChangeSchema } from "../auth-input";
 const id = z.string().min(1).max(100);
 const json = (data: unknown, status = 200) =>
   NextResponse.json(data, { status });
@@ -51,9 +52,7 @@ export async function handleAccount({
     return json({ ok: true });
   }
   if (route === "password") {
-    const input = z
-      .object({ current: z.string(), password: z.string().min(12).max(128) })
-      .parse(body);
+    const input = parseAuthInput(passwordChangeSchema, body);
     if (!(await bcrypt.compare(input.current, u.password)))
       throw new HttpError(403, "Current password is incorrect");
     await db.user.update({

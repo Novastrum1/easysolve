@@ -1,19 +1,16 @@
 import bcrypt from "bcryptjs";
 import { NextResponse } from "next/server";
 import { randomBytes } from "node:crypto";
-import { z } from "zod";
 import { db } from "../db";
-import { hash,HttpError,rateLimit,session } from "../security";
+import { hash, HttpError, rateLimit, session } from "../security";
 import type { RouteContext } from "./types";
-const authSchema = z.object({
-  email: z
-    .email()
-    .max(254)
-    .transform((s) => s.toLowerCase()),
-  password: z.string().min(12).max(128),
-  name: z.string().min(1).max(80).optional(),
-});
-const id = z.string().min(1).max(100);
+import {
+  loginSchema,
+  signupSchema,
+  recoverySchema,
+  resetSchema,
+  parseAuthInput,
+} from "../auth-input";
 const json = (data: unknown, status = 200) =>
   NextResponse.json(data, { status });
 export async function handleAuth({
@@ -29,8 +26,8 @@ export async function handleAuth({
       `auth:${request.headers.get("x-forwarded-for")?.split(",")[0] ?? "local"}`,
       10,
     );
-    const input = authSchema.parse(body);
     if (route === "auth/signup") {
+      const input = parseAuthInput(signupSchema, body);
       if (await db.user.findUnique({ where: { email: input.email } }))
         throw new HttpError(409, "An account with this email already exists");
       const u = await db.user.create({
@@ -43,15 +40,21 @@ export async function handleAuth({
       await session(u.id);
       return json({ ok: true });
     }
+    const input = parseAuthInput(loginSchema, body);
     const u = await db.user.findUnique({ where: { email: input.email } });
     if (!u || !(await bcrypt.compare(input.password, u.password)))
       throw new HttpError(401, "Email or password is incorrect");
+    if (u.suspendedAt)
+      throw new HttpError(
+        403,
+        "This account is suspended. Contact the operator.",
+      );
     await session(u.id);
     return json({ ok: true });
   }
   if (route === "auth/recover") {
     await rateLimit("recover", 5);
-    const email = z.email().parse(body.email).toLowerCase();
+    const { email } = parseAuthInput(recoverySchema, body);
     const u = await db.user.findUnique({ where: { email } });
     if (u) {
       if (!process.env.RECOVERY_WEBHOOK_URL)
@@ -90,9 +93,7 @@ export async function handleAuth({
     });
   }
   if (route === "auth/reset") {
-    const input = z
-      .object({ token: id, password: z.string().min(12).max(128) })
-      .parse(body);
+    const input = parseAuthInput(resetSchema, body);
     const password = await bcrypt.hash(input.password, 12);
     await db.$transaction(async (tx) => {
       const r = await tx.reset.findFirst({

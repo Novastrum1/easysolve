@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { providerStatus, isProviderAdmin } from "../provider-status";
 import { db } from "../db";
-import { allowanceWindow, monthStart, nextMonth, settings } from "../policy";
+import { allowanceWindow, monthStart, nextMonth, settings, planLimits } from "../policy";
 import type { RouteContext } from "./types";
 const id = z.string().min(1).max(100);
 const json = (data: unknown, status = 200) =>
@@ -108,6 +108,7 @@ export async function handleBootstrap({
         id: u.id,
         name: u.name,
         email: u.email,
+        role: u.role,
         providerAdmin: isProviderAdmin(u.id),
       },
       identities,
@@ -126,11 +127,11 @@ export async function handleBootstrap({
         encryption: !!process.env.TOKEN_ENCRYPTION_KEY,
       },
       limits: {
-        jobs: Number(process.env.PLAN_MAX_JOBS || 50),
-        tokens: Number(process.env.PLAN_MAX_TOKENS || 1000000),
+        jobs: planLimits(u).jobs,
+        tokens: planLimits(u).tokens,
         reset: nextMonth(),
       },
-      plan: process.env.PLAN_NAME || "Personal",
+      plan: planLimits(u).name,
     });
   }
   return undefined;

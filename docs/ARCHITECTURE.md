@@ -22,7 +22,9 @@ EasySolve uses TypeScript, Next.js App Router, React, PostgreSQL, Prisma 7 with 
 
 ## Data model and ownership
 
-Each registered user owns a private workspace. The user ID scopes every API record query, integration identity, conversation, job, run, proposal, and artifact. Workers load provider identities with both the job’s user and identity IDs. The frontend never supplies the user ID used for authorization. The implementation does not provide shared organization workspaces, roles, invitations, or cross-user usage leaderboards.
+Each registered user owns a private workspace. Ordinary workspace API queries scope records to the authenticated user ID, including integration identities, conversations, jobs, runs, proposals, and artifacts. Workers load provider identities with both the job’s user and identity IDs. The frontend never supplies the user ID used for authorization. The implementation does not provide shared organization workspaces, organization roles, invitations, or cross-user usage leaderboards.
+
+Site administration is a separate database `ADMIN` role with default `USER`. The `/admin` Server Component and every `/api/admin/*` handler check the current database-backed session, role and suspension state. Its cross-account projections omit secrets. Administrative account/job/plan changes recheck authorization inside a serialized transaction and write an `AdminAudit` record atomically. A singleton `AdminBootstrap` marker protects the one-time server-only owner promotion command; signup never grants elevated access. Suspension revokes sessions and blocks new work, and per-account plan columns supply server-controlled usage ceilings. See [ADMIN.md](ADMIN.md).
 
 PostgreSQL stores users, expiring hashed sessions and recovery tokens, encrypted identities, repositories and live health snapshots, issues, runs with patch artifacts, jobs, conversations, actual provider usage, assignment proposals, applications, and rate-limit windows. Database cascades clean up owned records. Tokens are encrypted before insert; only public identity projections are serialized.
 

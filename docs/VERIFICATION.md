@@ -1,5 +1,21 @@
 # Local verification record
 
+## Login form repair — 2026-10-29
+
+Reproduced the reported error in Chromium before changing the implementation: an existing fixture account submitted `/api/auth/login` and received 422. Inspection retained only field names/types: the form sent `email`, `password`, `name`, and `token`; `name` and `token` were null. The shared login/signup schema rejected the signup-only `name` because `.optional()` accepted omission but not null. The ignored token was not the failing field. Input names for email/password matched the API; credentials were enabled and present. An empty `?reset=` also inconsistently hid the email input while submitting login.
+
+Login/signup/recovery/reset now have separate schemas and mode-specific FormData serialization. Missing credentials remain invalid; no empty-string credential substitution is used. Validation returns readable field errors, rendered with accessible field associations. Email uses the `username` autocomplete hint at sign-in, passwords use current/new-password hints appropriately, and submit reads the DOM before loading-state rendering. Empty reset parameters consistently select normal login; missing redirect parameters do not affect the payload. New passwords require eight characters for signup/reset/change; login checks existing hashes without imposing a new creation policy on stored credentials. No existing real accounts or passwords were reset, and no credential/payload logging was added.
+
+TypeScript, production build, 57 unit tests, 45 integration tests and all 18 desktop/mobile browser tests passed. Browser regressions cover valid existing-account login, missing/disabled credentials, invalid credentials, eight-character signup and subsequent login, and autofill-style DOM values without input/change events on desktop/mobile. Autofill coverage simulates DOM population, rather than claiming an external password-manager integration. One initial integration run conflicted with the live worker consuming temporary job fixtures; the suite passed with the worker paused. An invalid-credential browser assertion initially also matched Next's route announcer; it was scoped to the form. Web and worker were restarted with the repaired code after testing.
+
+## Owner administration — 2026-10-29
+
+Implemented `/admin` and server-authorized `/api/admin/*` operations with an additive role/suspension/plan/audit/bootstrap migration, applied locally. No existing real account was promoted and the singleton bootstrap marker was not consumed. The CLI was smoke-tested without a selector and safely refused.
+
+Final verification: TypeScript and production build passed; 53 unit tests, 40 integration tests and all 8 desktop/mobile browser tests passed. Coverage includes anonymous/ordinary-user page and direct API denial, provider-allowlist separation, role-injection attempts, account pagination, CSRF, plan enforcement before provider/job admission, session revocation and suspension, job retry/cancel/lease and approval checks, secret redaction, bootstrap selection/reuse refusal, audit records and owner UI workflows. All administrative mutation tests use temporary fixture accounts. No live provider or GitHub writes were made.
+
+An initial build/test repetition was blocked by sandbox subprocess, database and Docker permissions; reruns with the required local permissions passed. Browser checks initially exposed an ambiguous test selector and a real form-refresh race that could clear a newly entered suspension reason; both were corrected before the final passing suite. Web was rebuilt/restarted after the fix.
+
 ## Latest maintenance — 2026-10-29
 
 TypeScript, production build, 49 unit tests, 32 integration tests (including actual Docker sandbox execution), and 4 desktop/mobile browser tests passed. `npm audit --omit=dev` reported zero vulnerabilities. Diagnostics confirmed the database, encryption configuration, Docker daemon, and sandbox image; there were no queued or running jobs. The stopped PostgreSQL container was restored without deleting its data and now uses `restart: unless-stopped`. Web and worker were started. No live AI call was made; the current configured provider is AgentRouter and key presence remains unverified. The user will supply a paid provider credential later.

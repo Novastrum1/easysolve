@@ -4,6 +4,10 @@ generator client {
 datasource db {
  provider = "postgresql"
 }
+enum Role {
+ USER
+ ADMIN
+}
 model User {
  id String @id @default(cuid())
  email String @unique
@@ -11,6 +15,11 @@ model User {
  password String
  createdAt DateTime @default(now())
  settings Json @default("{}")
+ role Role @default(USER)
+ suspendedAt DateTime?
+ planName String?
+ planMaxJobs Int?
+ planMaxTokens Int?
  sessions Session[]
  identities Identity[]
  repos Repository[]
@@ -195,4 +204,20 @@ model AIRequest {
  runId String?
  createdAt DateTime @default(now())
  @@index([userId,runId])
+}
+
+model AdminAudit {
+ id String @id @default(cuid())
+ actorId String
+ action String
+ targetId String
+ details Json @default("{}")
+ createdAt DateTime @default(now())
+ @@index([createdAt])
+}
+
+model AdminBootstrap {
+ id String @id
+ userId String
+ createdAt DateTime @default(now())
 }

@@ -1,6 +1,7 @@
 import { providerConfig } from "./providers";
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { AuthInputError } from "./auth-input";
 import { AllowanceError } from "./ai";
 import { db } from "./db";
 import { handleAccount } from "./routes/account";
@@ -10,6 +11,7 @@ import { handleContribution } from "./routes/contribution";
 import { handleRepositories } from "./routes/repositories";
 import { handleReviews } from "./routes/reviews";
 import { handleRuns } from "./routes/runs";
+import { handleAdmin } from "./routes/admin";
 import { csrf, HttpError, publicError, rateLimit, user } from "./security";
 const id = z.string().min(1).max(100);
 const json = (data: unknown, status = 200) =>
@@ -21,6 +23,7 @@ export async function api(request: Request, path: string[]) {
     if (
       method === "GET" &&
       !["health", "bootstrap", "discover", "reviews"].includes(route) &&
+      path[0] !== "admin" &&
       !(path[0] === "runs" && path.length === 2)
     )
       throw new HttpError(405, "Use POST for this operation");
@@ -55,6 +58,7 @@ export async function api(request: Request, path: string[]) {
     await rateLimit(`user:${u.id}`, 120);
     const context = { request, path, body, url, u };
     for (const handler of [
+      handleAdmin,
       handleAccount,
       handleBootstrap,
       handleRepositories,
@@ -67,6 +71,8 @@ export async function api(request: Request, path: string[]) {
     }
     throw new HttpError(404, "Endpoint not found");
   } catch (e) {
+    if (e instanceof AuthInputError)
+      return json({ error: e.message, fieldErrors: e.fieldErrors }, 422);
     if (e instanceof z.ZodError)
       return json({ error: e.issues.map((i) => i.message).join("; ") }, 422);
     if (e instanceof AllowanceError)

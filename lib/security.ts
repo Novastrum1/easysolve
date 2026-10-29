@@ -53,7 +53,13 @@ export async function user() {
   });
   if (!s || s.expiresAt < new Date())
     throw new HttpError(401, "Session expired. Please sign in.");
+  if (s.user.suspendedAt) throw new HttpError(403, "This account is suspended. Contact the operator.");
   return s.user;
+}
+export async function requireAdmin() {
+  const u = await user();
+  if (u.role !== "ADMIN") throw new HttpError(403, "Administrator access required");
+  return u;
 }
 export async function session(userId: string) {
   const token = randomBytes(32).toString("base64url");

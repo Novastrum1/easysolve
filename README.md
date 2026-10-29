@@ -18,6 +18,8 @@ npm run start:all
 
 Create your account in the application. Connect GitHub in **Account**. Set `AI_PROVIDER=agentrouter`, `AGENTROUTER_BASE_URL=https://co.agentrouter.org/v1`, `AGENTROUTER_API_KEY` and a catalog-verified `AGENTROUTER_MODEL` in the private root `.env`, then restart the app and worker. Direct OpenAI remains optional with `AI_PROVIDER=openai` and a separate `OPENAI_API_KEY`. GitHub workflows work without an AI key. Key presence alone does not verify provider access.
 
+Owner administration is available at **`/admin`**. Promote only your existing account once with `npm run admin:bootstrap -- --email 'your-existing-email@example.com'` on the trusted server after applying migrations. Signup never grants administrator access. See [owner setup and administration](docs/ADMIN.md) for user controls, plans, job operations, authorization and auditing.
+
 In Codespaces, set `APP_URL=https://<codespace-name>-3000.app.github.dev`. The setup script does this automatically when creating `.env`. It must match the exact browser origin for CSRF protection. Never expose preview port 3000 publicly without reviewing the production deployment instructions.
 
 ## Commands

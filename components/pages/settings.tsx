@@ -692,12 +692,12 @@ export function AccountPage(c: Context) {
                 required
               />
             </Field>
-            <Field label="New password">
+            <Field label="New password" hint="Use at least 8 characters.">
               <input
                 type="password"
                 name="password"
                 autoComplete="new-password"
-                minLength={12}
+                minLength={8}
                 required
               />
             </Field>

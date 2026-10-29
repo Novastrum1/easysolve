@@ -1,0 +1,152 @@
+.dashboard {
+  max-width: 1300px;
+  margin: auto;
+  padding: 36px 24px 80px;
+  display: grid;
+  gap: 24px;
+}
+.dashboard h1 {
+  font-size: clamp(28px, 4vw, 40px);
+  margin: 8px 0;
+}
+.dashboard h2 {
+  font-size: 20px;
+}
+.dashboard h3 {
+  font-size: 16px;
+}
+.dashboard p {
+  color: var(--muted);
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.header,
+.actions,
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+.header,
+.row {
+  justify-content: space-between;
+}
+.eyebrow {
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--accent) !important;
+  font-size: 12px;
+}
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 16px;
+}
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 22px;
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+.metric {
+  font-size: 30px;
+}
+.scroll {
+  overflow-x: auto;
+}
+.dashboard table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+}
+.dashboard th,
+.dashboard td {
+  padding: 14px 10px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+.dashboard th {
+  color: var(--muted);
+  font-weight: 500;
+}
+.dashboard code {
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.dashboard pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 12px;
+  max-width: 100%;
+  margin: 0;
+  max-height: 320px;
+  overflow: auto;
+}
+.dashboard td pre {
+  min-width: 280px;
+  max-width: 440px;
+}
+.dashboard details {
+  min-width: 180px;
+}
+.dashboard summary {
+  cursor: pointer;
+  color: var(--accent);
+  margin-bottom: 8px;
+}
+.dashboard nav button {
+  background: var(--surface2);
+  color: var(--text);
+  border-color: var(--border);
+}
+.dashboard nav button[aria-current="page"] {
+  background: var(--accent);
+  color: #102b1d;
+}
+.dashboard input,
+.dashboard select {
+  width: 100%;
+  background: var(--surface2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  padding: 10px;
+}
+.form {
+  max-width: 620px;
+  display: grid;
+  gap: 14px;
+  border-top: 1px solid var(--border);
+  padding: 20px 0;
+}
+.form button {
+  justify-self: start;
+}
+.error,
+.notice {
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.error {
+  color: var(--red) !important;
+}
+.notice {
+  color: var(--accent) !important;
+}
+@media (max-width: 600px) {
+  .dashboard {
+    padding: 24px 12px;
+  }
+  .panel {
+    padding: 16px;
+  }
+  .dashboard td,
+  .dashboard th {
+    min-width: 120px;
+  }
+}

@@ -1,4 +1,11 @@
 import { z } from "zod";
+export function planLimits(u: { planName?: string | null; planMaxJobs?: number | null; planMaxTokens?: number | null }) {
+  return {
+    name: u.planName ?? (process.env.PLAN_NAME || "Personal"),
+    jobs: u.planMaxJobs ?? Number(process.env.PLAN_MAX_JOBS || 50),
+    tokens: u.planMaxTokens ?? Number(process.env.PLAN_MAX_TOKENS || 1000000),
+  };
+}
 export const settingsSchema = z.object({
   mode: z.enum(["approval", "automatic", "plan"]).default("approval"),
   autosync: z.boolean().default(true),

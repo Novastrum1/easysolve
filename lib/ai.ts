@@ -2,7 +2,7 @@ import { providerConfig, generateAI } from "./providers";
 import type OpenAI from "openai";
 import { limit, type OutputFormat } from "./providers/openai";
 import { db } from "./db";
-import { allowanceWindow, monthStart, nextMonth, settings } from "./policy";
+import { allowanceWindow, monthStart, nextMonth, settings, planLimits } from "./policy";
 import { HttpError, rateLimit } from "./security";
 import { providerFingerprint } from "./provider-status";
 export class AllowanceError extends Error {
@@ -35,6 +35,7 @@ export async function ai(
       async (tx) => {
         await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`usage:${userId}`}))`;
         const u = await tx.user.findUniqueOrThrow({ where: { id: userId } });
+        if (u.suspendedAt) throw new HttpError(403, "Account suspended");
         const config = settings(u.settings);
         const usage = await tx.usage.aggregate({
           where: { userId, createdAt: { gte: monthStart() } },
@@ -55,7 +56,7 @@ export async function ai(
           max;
         if (
           (usage._sum.total ?? 0) + reserve >
-          Number(process.env.PLAN_MAX_TOKENS || 1000000)
+          planLimits(u).tokens
         )
           throw new AllowanceError(
             "Plan token allowance exhausted; queued until next reset",

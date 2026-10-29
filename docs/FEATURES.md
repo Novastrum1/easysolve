@@ -4,6 +4,8 @@ This is an implemented application, with real database persistence and provider-
 
 ## 1. Implemented and tested
 
+Owner administration at `/admin` adds explicit database roles, one-time server bootstrap, paginated user search and account details, suspension/reactivation, workspace/repository/job/usage summaries, failed-job inspection and cancel/retry, per-account plan ceilings, sanitized provider health and a transactional audit log. Server-side page and API authorization is independent of provider-test allowlists. See [ADMIN.md](ADMIN.md) for setup and tests.
+
 | Area            | Delivered behavior                                                                                                                                                                                                 | Verification                                                                                                     |
 | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------- |
 | Account         | Signup/login/logout, private user workspaces, password changes, hashed expiring sessions, session revocation, profile editing                                                                                      | Real API and browser flows; cross-user run access/read/cancel denied                                             |
@@ -55,7 +57,7 @@ Live attempt on 2026-10-29: local diagnostics passed, but the first OpenAI reque
 
 - No payment provider/subscriptions. This was optional; billing shows self-hosted entitlements honestly. Live payment configuration is not disguised as implemented functionality.
 - No automated Drips integration or identity verification. Those remain manual as required unless a supported integration is configured.
-- No shared multi-member workspaces, invitations, organization roles, or public usage leaderboard. Each account has a private workspace; no cross-user information is exposed.
+- No shared multi-member workspaces, invitations, organization roles, or public usage leaderboard. Each account has a private workspace; cross-account administration is restricted to the explicit site `ADMIN` role.
 - Sandbox edits are limited to bounded text files. Binary changes, symlinks, file deletion/renames, very large repositories, internet dependency installation, special toolchains, and CI-equivalent environments need an execution backend extension. Tests that cannot run fail or explicitly say they were not run.
 - Full-file replacement diffs are readable and honestly labeled; line-preserving unified diff generation, inline code review comments, syntax highlighting, and provider webhook-driven instant updates are not implemented. Reliable polling is used instead of streaming.
 - Draft-to-ready transition happens on GitHub. EasySolve publishes draft PRs and uses squash merging only, subject to GitHub protections. Other merge methods are not currently selectable.

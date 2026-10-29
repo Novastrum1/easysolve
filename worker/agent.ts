@@ -14,6 +14,8 @@ const responseSchema = z.object({
   summary: z.string().nullable(),
 });
 export async function executeRun(userId: string, id: string) {
+  const account = await db.user.findUniqueOrThrow({ where: { id: userId } });
+  if (account.suspendedAt) throw Error("Account suspended");
   let run = await db.run.findFirstOrThrow({ where: { id, userId } });
   if (
     [
@@ -232,6 +234,8 @@ export async function publish(userId: string, id: string) {
   );
 }
 async function publishLocked(userId: string, id: string) {
+  const account = await db.user.findUniqueOrThrow({ where: { id: userId } });
+  if (account.suspendedAt) throw Error("Account suspended");
   const run = await db.run.findFirstOrThrow({ where: { id, userId } });
   if (run.status === "published") return;
   if (

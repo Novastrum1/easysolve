@@ -64,10 +64,12 @@ export function Field({
   label: caption,
   children,
   hint,
+  error,
 }: {
   label: string;
   children: React.ReactNode;
   hint?: string;
+  error?: string;
 }) {
   const fieldId = useId();
   return (
@@ -78,11 +80,13 @@ export function Field({
             children as React.ReactElement<Record<string, unknown>>,
             {
               "aria-labelledby": fieldId,
-              "aria-describedby": hint ? fieldId + "-hint" : undefined,
+              "aria-invalid": error ? true : undefined,
+              "aria-describedby": [hint && fieldId + "-hint", error && fieldId + "-error"].filter(Boolean).join(" ") || undefined,
             },
           )
         : children}
       {hint && <small id={fieldId + "-hint"}>{hint}</small>}
+      {error && <small id={fieldId + "-error"} role="alert">{error}</small>}
     </label>
   );
 }
@@ -192,6 +196,9 @@ export function Select({
     </span>
   );
 }
+export class RequestError extends Error {
+  constructor(message: string, public fieldErrors?: Record<string, string>) { super(message); }
+}
 export async function request(path: string, body?: unknown, method?: string) {
   const r = await fetch(`/api/${path}`, {
     method: method ?? (body ? "POST" : "GET"),
@@ -199,7 +206,7 @@ export async function request(path: string, body?: unknown, method?: string) {
     body: body ? JSON.stringify(body) : undefined,
   });
   const data = await r.json();
-  if (!r.ok) throw new Error(data.error || "Request failed");
+  if (!r.ok) throw new RequestError(data.error || "Request failed", data.fieldErrors);
   return data;
 }
 export function Diff({ value }: { value: string }) {

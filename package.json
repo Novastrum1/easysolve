@@ -13,6 +13,7 @@
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate deploy",
     "db:seed": "tsx prisma/seed.ts",
+    "admin:bootstrap": "tsx scripts/bootstrap-admin.ts",
     "setup": "node scripts/setup.mjs",
     "worker:start": "tsx worker/index.ts",
     "test:browser": "playwright test",

@@ -43,6 +43,9 @@ body {
   font-size: 14px;
   -webkit-font-smoothing: antialiased;
 }
+.field [role="alert"] {
+  color: var(--red);
+}
 button,
 input,
 textarea,

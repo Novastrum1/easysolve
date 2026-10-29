@@ -33,6 +33,7 @@ import {
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
+import { authPayload, type AuthMode } from "@/lib/auth-input";
 import { MaintainerDetails } from "./pages/maintainer";
 import {
   Badge,
@@ -44,6 +45,7 @@ import {
   SearchBox,
   Select,
   request,
+  RequestError,
 } from "./ui";
 import {
   AccountPage,
@@ -272,6 +274,7 @@ export function Workspace() {
           <ChevronRight size={14} />
         </button>
         <nav aria-label="Main navigation">
+          {data.user.role === "ADMIN" && <div className="nav-group"><p>Administration</p><Link href="/admin"><ShieldCheck size={18} /><span>Owner dashboard</span></Link></div>}
           {nav.map((g) => (
             <div className="nav-group" key={g.group}>
               <p>{g.group}</p>
@@ -944,31 +947,38 @@ function Auth({
   onLogin: () => Promise<void>;
   error: string;
 }) {
-  const [mode, setMode] = useState("login"),
+  const [mode, setMode] = useState<Exclude<AuthMode, "reset">>("login"),
     [busy, setBusy] = useState(false),
     [message, setMessage] = useState("");
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [resetToken, setResetToken] = useState<string | null>(() => {
+    if (typeof window === "undefined") return null;
+    const token = new URLSearchParams(window.location.search).get("reset");
+    return token?.trim() ? token : null;
+  });
+  const action: AuthMode = resetToken ? "reset" : mode;
+  const switchMode = (next: Exclude<AuthMode, "reset">) => {
+    setMode(next); setMessage(""); setFieldErrors({});
+  };
   const submit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setBusy(true);
     setMessage("");
+    setFieldErrors({});
+    // Capture the enabled DOM controls before any loading-state render.
     const f = new FormData(e.currentTarget);
-    const reset = new URLSearchParams(location.search).get("reset");
     try {
-      const result = await request(`auth/${reset ? "reset" : mode}`, {
-        email: f.get("email"),
-        password: f.get("password"),
-        name: f.get("name"),
-        token: reset,
-      });
-      if (mode === "recover" || reset) {
+      const result = await request(`auth/${action}`, authPayload(action, f, resetToken));
+      if (action === "recover" || action === "reset") {
         setMessage(
           result.message ?? "Password changed. Sign in with your new password.",
         );
-        if (reset) history.replaceState({}, "", "/");
+        if (action === "reset") { history.replaceState({}, "", "/"); setResetToken(null); }
         setMode("login");
       } else await onLogin();
     } catch (e) {
-      setMessage((e as Error).message);
+      if (e instanceof RequestError && e.fieldErrors) setFieldErrors(e.fieldErrors);
+      else setMessage((e as Error).message);
     } finally {
       setBusy(false);
     }
@@ -1015,85 +1025,89 @@ function Auth({
         <form onSubmit={submit}>
           <div className="eyebrow">YOUR NEXT CONTRIBUTION AWAITS</div>
           <h2>
-            {mode === "signup"
+            {action === "reset" ? "Choose a new password." : mode === "signup"
               ? "Make room for good work."
               : mode === "recover"
                 ? "Find your way back."
                 : "Welcome to EasySolve."}
           </h2>
           <p>
-            {mode === "signup"
+            {action === "reset" ? "Use at least 8 characters for your new password." : mode === "signup"
               ? "Create your private workspace to get started."
               : "Sign in to pick up where you left off."}
           </p>
           {error && !error.includes("Sign in") && (
             <div className="alert">{error}</div>
           )}
-          {mode === "signup" && (
-            <Field label="Your name">
+          {action === "signup" && (
+            <Field label="Your name" error={fieldErrors.name}>
               <input
                 name="name"
                 autoComplete="name"
                 required
+                maxLength={80}
                 placeholder="Alex Morgan"
               />
             </Field>
           )}
-          {!(
-            typeof window !== "undefined" &&
-            new URLSearchParams(location.search).has("reset")
-          ) && (
-            <Field label="Email address">
+          {action !== "reset" && (
+            <Field label="Email address" error={fieldErrors.email}>
               <input
                 name="email"
                 type="email"
-                autoComplete="email"
+                autoComplete={action === "login" ? "username" : "email"}
                 required
+                maxLength={254}
                 placeholder="you@example.com"
               />
             </Field>
           )}
-          {mode !== "recover" && (
-            <Field label="Password" hint="Use at least 12 characters.">
+          {action !== "recover" && (
+            <Field label="Password" hint="Use at least 8 characters." error={fieldErrors.password}>
               <input
                 name="password"
                 type="password"
                 autoComplete={
-                  mode === "signup" ? "new-password" : "current-password"
+                  action === "login" ? "current-password" : "new-password"
                 }
-                minLength={12}
+                minLength={action === "login" ? undefined : 8}
+                maxLength={128}
                 required
                 placeholder="Your password"
               />
             </Field>
           )}
+          {fieldErrors.token && <div role="alert" className="alert">{fieldErrors.token}</div>}
+          {fieldErrors.form && <div role="alert" className="alert">{fieldErrors.form}</div>}
           {message && (
             <div role="alert" className="alert">
               {message}
             </div>
           )}
           <Button type="submit" busy={busy}>
-            {mode === "signup"
+            {action === "reset" ? "Save new password" : mode === "signup"
               ? "Create workspace"
               : mode === "recover"
                 ? "Send recovery link"
                 : "Continue"}
             <ArrowRight size={16} />
           </Button>
-          <button
+          {action !== "reset" && <button
             type="button"
             className="text-button"
-            onClick={() => setMode(mode === "signup" ? "login" : "signup")}
+            disabled={busy}
+            onClick={() => switchMode(mode === "signup" ? "login" : "signup")}
           >
             {mode === "signup"
               ? "Already have an account? Sign in"
               : "New here? Create an account"}
-          </button>
-          {mode === "login" && (
+          </button>}
+          {action === "login" && (
             <button
               type="button"
               className="text-button muted"
-              onClick={() => setMode("recover")}
+              disabled={busy}
+              onClick={() => switchMode("recover")}
             >
               Forgot your password?
             </button>

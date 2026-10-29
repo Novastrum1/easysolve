@@ -1,5 +1,5 @@
 import { db } from "./db";
-import { groups,monthStart,settings } from "./policy";
+import { groups,monthStart,settings,planLimits } from "./policy";
 import { HttpError } from "./security";
 export async function enqueue(
   userId: string,
@@ -7,10 +7,13 @@ export async function enqueue(
   key: string,
   payload: any,
 ) {
-  return db.job.upsert({
-    where: { key },
-    create: { userId, kind, key, payload },
-    update: {},
+  return db.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${userId}))`;
+    const account = await tx.user.findUniqueOrThrow({ where: { id: userId } });
+    if (account.suspendedAt) throw new HttpError(403, "Account suspended");
+    return tx.job.upsert({
+      where: { key }, create: { userId, kind, key, payload }, update: {},
+    });
   });
 }
 export async function startRuns(userId: string, ids: string[]) {
@@ -19,6 +22,7 @@ export async function startRuns(userId: string, ids: string[]) {
   return db.$transaction(async (tx) => {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${userId}))`;
     const u = await tx.user.findUniqueOrThrow({ where: { id: userId } });
+    if (u.suspendedAt) throw new HttpError(403, "Account suspended");
     const config = settings(u.settings);
     const count = await tx.run.count({
       where: { userId, createdAt: { gte: monthStart() } },
@@ -62,7 +66,7 @@ export async function startRuns(userId: string, ids: string[]) {
     const batches = groups(issues);
     if (
       count + batches.length >
-      Math.min(config.monthlyJobs, Number(process.env.PLAN_MAX_JOBS || 50))
+      Math.min(config.monthlyJobs, planLimits(u).jobs)
     )
       throw new HttpError(403, "Monthly job limit reached");
     const runs = [];
@@ -104,7 +108,7 @@ export async function claimJob() {
     if (active >= Number(process.env.WORKER_CONCURRENCY || 1)) return null;
     const jobs = await tx.$queryRaw<
       { id: string }[]
-    >`SELECT id FROM "Job" WHERE ((status='queued' AND "availableAt"<=NOW()) OR (status='running' AND "leaseUntil"<NOW())) ORDER BY "createdAt" FOR UPDATE SKIP LOCKED LIMIT 1`;
+    >`SELECT j.id FROM "Job" j JOIN "User" u ON u.id=j."userId" WHERE u."suspendedAt" IS NULL AND ((j.status='queued' AND j."availableAt"<=NOW()) OR (j.status='running' AND j."leaseUntil"<NOW())) ORDER BY j."createdAt" FOR UPDATE OF j SKIP LOCKED LIMIT 1`;
     if (!jobs.length) return null;
     return tx.job.update({
       where: { id: jobs[0].id },
