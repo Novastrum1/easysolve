@@ -176,10 +176,12 @@ export function UsagePage(c: Context) {
   const cost = u.reduce(
     (n: number, v: any) =>
       n +
-      ((v.input - v.cached) * config.inputPrice +
-        v.cached * config.cachedPrice +
-        v.output * config.outputPrice) /
-        1000000,
+      (v.provider === "openai"
+        ? ((v.input - v.cached) * config.inputPrice +
+            v.cached * config.cachedPrice +
+            v.output * config.outputPrice) /
+          1000000
+        : 0),
     0,
   );
   const days = Array.from({ length: new Date().getUTCDate() }, (_, i) => {
@@ -267,7 +269,7 @@ export function UsagePage(c: Context) {
               <strong>{u.length}</strong>
             </div>
             <div>
-              <span>Estimated cost</span>
+              <span>Direct OpenAI estimate</span>
               <strong>
                 {config.inputPrice || config.outputPrice
                   ? `$${cost.toFixed(4)}`
@@ -275,12 +277,16 @@ export function UsagePage(c: Context) {
               </strong>
             </div>
             <small>
-              Estimate uses your configured price per million tokens; it is not
-              an invoice.
+              Estimate covers OpenAI records only at your configured prices per
+              million tokens; it is not an invoice.
             </small>
           </div>
         </Panel>
       </div>
+      <p className="muted">
+        Reasoning tokens: {sum("reasoning").toLocaleString()} · Included in
+        output tokens, never added twice.
+      </p>
       <Panel title="Usage by purpose">
         <div className="table-scroll">
           <table>
@@ -468,7 +474,8 @@ export function AccountPage(c: Context) {
   const [token, setToken] = useState(""),
     [busy, setBusy] = useState(false),
     [disconnect, setDisconnect] = useState<any>(null),
-    [name, setName] = useState(c.data.user.name);
+    [name, setName] = useState(c.data.user.name),
+    [testingProvider, setTestingProvider] = useState(false);
   return (
     <>
       <PageHead
@@ -506,7 +513,7 @@ export function AccountPage(c: Context) {
           </form>
         </Panel>
         <Panel
-          title="DeepSeek connection"
+          title={`${c.data.health.provider.name} connection`}
           description="API keys are configured on the server, never sent to the browser."
         >
           <div className="connection-large">
@@ -514,17 +521,50 @@ export function AccountPage(c: Context) {
               <Zap size={22} />
             </div>
             <div>
-              <strong>DeepSeek Responses API</strong>
+              <strong>
+                {c.data.health.provider.name} ·{" "}
+                {c.data.health.provider.modelName || "Model selection required"}
+              </strong>
               <Badge
-                status={c.data.health.deepseek ? "connected" : "setup_required"}
+                status={
+                  c.data.health.provider.verified
+                    ? "connection_verified"
+                    : c.data.health.ai
+                      ? "configured"
+                      : "setup_required"
+                }
               />
             </div>
           </div>
-          {!c.data.health.deepseek && (
+          <p className="muted">
+            {c.data.health.provider.verified
+              ? `Connection verified ${new Date(c.data.health.provider.verifiedAt).toLocaleString()}`
+              : "Connection not verified. Configuration alone does not confirm model access."}
+          </p>
+          {c.data.user.providerAdmin && (
+            <Button
+              variant="secondary"
+              busy={testingProvider}
+              onClick={async () => {
+                setTestingProvider(true);
+                try {
+                  await c.act("provider/test", {});
+                } catch {
+                  await c.refresh();
+                } finally {
+                  setTestingProvider(false);
+                }
+              }}
+            >
+              Test {c.data.health.provider.name} connection
+            </Button>
+          )}
+          {!c.data.health.ai && (
             <div className="settings-fields">
               <p className="muted">
-                Ask your operator to set DEEPSEEK_API_KEY and DEEPSEEK_MODEL in the
-                server environment, then restart the app and worker.
+                Ask your operator to configure the selected provider’s API key
+                and model in the server environment, then restart the app and
+                worker.
               </p>
             </div>
           )}

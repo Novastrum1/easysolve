@@ -1,11 +1,11 @@
-import {AIProviderError} from "../lib/providers/deepseek";
 import "dotenv/config";
+import { AIProviderError } from "../lib/providers/openai";
 import { AllowanceError } from "../lib/ai";
 import { db } from "../lib/db";
-import { syncIssues,syncRepositoryStats } from "../lib/github";
+import { syncIssues, syncRepositoryStats } from "../lib/github";
 import { settings } from "../lib/policy";
-import { claimJob,enqueue } from "../lib/queue";
-import { executeRun,publish } from "./agent";
+import { claimJob, enqueue } from "../lib/queue";
+import { executeRun, publish } from "./agent";
 let stopped = false;
 process.on("SIGTERM", () => (stopped = true));
 process.on("SIGINT", () => (stopped = true));
@@ -92,7 +92,12 @@ async function main() {
         await db.job.updateMany({
           where: { id: job.id, status: "running", attempts: job.attempts },
           data: {
-            status: allowance || (!(e instanceof AIProviderError)||e.retryable)&&job.attempts<3 ? "queued" : "failed",
+            status:
+              allowance ||
+              ((!(e instanceof AIProviderError) || e.retryable) &&
+                job.attempts < 3)
+                ? "queued"
+                : "failed",
             leaseUntil: null,
             availableAt: allowance
               ? e.reset

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { providerStatus, isProviderAdmin } from "../provider-status";
 import { db } from "../db";
 import { allowanceWindow, monthStart, nextMonth, settings } from "../policy";
 import type { RouteContext } from "./types";
@@ -96,13 +97,19 @@ export async function handleBootstrap({
       where: { userId: u.id, createdAt: { gte: window.start } },
       _sum: { total: true },
     });
+    const provider = await providerStatus();
     return json({
       allowance: {
         start: window.start,
         reset: window.reset,
         total: cycleUsage._sum.total ?? 0,
       },
-      user: { id: u.id, name: u.name, email: u.email },
+      user: {
+        id: u.id,
+        name: u.name,
+        email: u.email,
+        providerAdmin: isProviderAdmin(u.id),
+      },
       identities,
       repositories,
       issues,
@@ -114,7 +121,8 @@ export async function handleBootstrap({
       jobs,
       settings: settings(u.settings),
       health: {
-        deepseek: !!process.env.DEEPSEEK_API_KEY,
+        ai: provider.configured,
+        provider,
         encryption: !!process.env.TOKEN_ENCRYPTION_KEY,
       },
       limits: {

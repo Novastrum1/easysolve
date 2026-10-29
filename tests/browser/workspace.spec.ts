@@ -1,4 +1,4 @@
-import { expect,test } from "@playwright/test";
+import { expect, test } from "@playwright/test";
 import "dotenv/config";
 import { db } from "../../lib/db";
 const emails: string[] = [];
@@ -56,6 +56,20 @@ test("signup, every workspace screen, persistence, responsive navigation and log
     await expect(
       page.getByRole("heading", { name: heading, exact: true }),
     ).toBeVisible();
+    if (name === "Account") {
+      await expect(
+        page.getByText(
+          `${process.env.AI_PROVIDER === "agentrouter" ? "AgentRouter" : "OpenAI"} · GPT-6 Astra`,
+          { exact: true },
+        ),
+      ).toBeVisible();
+      await expect(
+        page.getByRole("button", {
+          name: /Test (OpenAI|AgentRouter) connection/,
+        }),
+      ).toHaveCount(0);
+      await expect(page.getByText("DeepSeek", { exact: true })).toHaveCount(0);
+    }
     expect(
       await page.evaluate(
         () => document.documentElement.scrollWidth <= window.innerWidth + 1,

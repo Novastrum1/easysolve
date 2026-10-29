@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { zodTextFormat } from "openai/helpers/zod";
 import { ai } from "../lib/ai";
 import { db } from "../lib/db";
 import { github } from "../lib/github";
@@ -7,10 +8,10 @@ import { Sandbox } from "./sandbox";
 const responseSchema = z.object({
   plan: z.string(),
   action: z.enum(["read", "write", "test", "finish"]),
-  path: z.string().optional(),
-  content: z.string().max(200000).optional(),
-  command: z.string().max(2000).optional(),
-  summary: z.string().optional(),
+  path: z.string().nullable(),
+  content: z.string().max(200000).nullable(),
+  command: z.string().max(2000).nullable(),
+  summary: z.string().nullable(),
 });
 export async function executeRun(userId: string, id: string) {
   let run = await db.run.findFirstOrThrow({ where: { id, userId } });
@@ -108,7 +109,7 @@ export async function executeRun(userId: string, id: string) {
     );
     const changed: Record<string, string> = {};
     const transcript: string[] = [];
-    let repairing=false;
+    let repairing = false;
     let tests = "",
       plan = "",
       finished = false;
@@ -118,10 +119,12 @@ export async function executeRun(userId: string, id: string) {
       if (current.status === "cancelled") throw Error("Run cancelled");
       const raw = await ai(
         userId,
-        repairing?"repair":"coding",
+        repairing ? "repair" : "coding",
         `${context}\nActivity:\n${transcript.join("\n").slice(-100000)}\nReviewer feedback: ${run.feedback}`,
         instruction,
         id,
+        undefined,
+        zodTextFormat(responseSchema, "agent_action"),
       );
       const action = responseSchema.parse(
         JSON.parse(raw.replace(/^```(?:json)?\s*|\s*```$/g, "")),
@@ -141,7 +144,7 @@ export async function executeRun(userId: string, id: string) {
       else if (
         action.action === "write" &&
         action.path &&
-        action.content !== undefined
+        action.content !== null
       ) {
         if (/(^|\/)(\.git|\.github|\.env[^/]*)(\/|$)/.test(action.path))
           throw Error("Protected path modification blocked");
@@ -152,7 +155,11 @@ export async function executeRun(userId: string, id: string) {
         changed[action.path] = action.content;
       } else if (action.action === "test" && action.command) {
         result = await sandbox.op({ type: "test", command: action.command });
-        try{repairing=JSON.parse(result).exitCode!==0;}catch{repairing=true;}
+        try {
+          repairing = JSON.parse(result).exitCode !== 0;
+        } catch {
+          repairing = true;
+        }
         tests += `$ ${action.command}\n${result}\n`;
         await db.run.update({ where: { id }, data: { tests } });
       } else throw Error("Invalid agent action");

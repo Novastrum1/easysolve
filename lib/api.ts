@@ -1,3 +1,4 @@
+import { providerConfig } from "./providers";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { AllowanceError } from "./ai";
@@ -9,7 +10,7 @@ import { handleContribution } from "./routes/contribution";
 import { handleRepositories } from "./routes/repositories";
 import { handleReviews } from "./routes/reviews";
 import { handleRuns } from "./routes/runs";
-import { csrf,HttpError,publicError,rateLimit,user } from "./security";
+import { csrf, HttpError, publicError, rateLimit, user } from "./security";
 const id = z.string().min(1).max(100);
 const json = (data: unknown, status = 200) =>
   NextResponse.json(data, { status });
@@ -29,7 +30,8 @@ export async function api(request: Request, path: string[]) {
       await db.$queryRaw`SELECT 1`;
       return json({
         ok: true,
-        deepseek: !!process.env.DEEPSEEK_API_KEY,
+        ai: providerConfig().configured,
+        provider: providerConfig().id,
         encryption: !!process.env.TOKEN_ENCRYPTION_KEY,
       });
     }

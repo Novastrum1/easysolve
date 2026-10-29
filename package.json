@@ -19,7 +19,8 @@
     "test:integration": "vitest run --config vitest.integration.config.ts",
     "doctor": "tsx scripts/doctor.ts",
     "format": "prettier --write app components lib worker tests scripts docs README.md",
-    "ai:verify": "tsx scripts/verify-ai.ts"
+    "ai:verify": "tsx scripts/verify-ai.ts",
+    "agentrouter:verify": "tsx scripts/verify-agentrouter.ts"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.10.1",

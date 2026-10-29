@@ -18,6 +18,7 @@ model User {
  runs Run[]
  messages Message[]
  usage Usage[]
+ aiRequests AIRequest[]
  proposals Proposal[]
  applications Application[]
  resets Reset[]
@@ -138,11 +139,12 @@ model Usage {
  userId String
  user User @relation(fields:[userId],references:[id],onDelete:Cascade)
  runId String?
- provider String @default("deepseek")
+ provider String @default("openai")
  purpose String
  model String
  input Int
  cached Int @default(0)
+ reasoning Int @default(0)
  output Int
  total Int
  createdAt DateTime @default(now())
@@ -177,4 +179,20 @@ model RateLimit {
  key String @id
  count Int @default(1)
  expiresAt DateTime
+}
+
+model ProviderConnection {
+ id String @id
+ fingerprint String
+ model String
+ verifiedAt DateTime
+}
+
+model AIRequest {
+ id String @id @default(cuid())
+ userId String
+ user User @relation(fields:[userId],references:[id],onDelete:Cascade)
+ runId String?
+ createdAt DateTime @default(now())
+ @@index([userId,runId])
 }

@@ -1,12 +1,15 @@
 import "dotenv/config";
+import { providerConfig } from "../lib/providers";
 import { execFileSync } from "node:child_process";
 import { db } from "../lib/db";
 let failed = false;
 console.log(`EasySolve diagnostics · Node ${process.version}`);
 console.log(`Browser origin: ${process.env.APP_URL || "not configured"}`);
+const provider = providerConfig();
 console.log(
-  `DeepSeek: ${process.env.DEEPSEEK_API_KEY ? "key configured (not live-verified)" : "setup required"} · model ${process.env.DEEPSEEK_MODEL || "deepseek-flash"}`,
+  `${provider.name}: ${provider.configured ? "key configured (not live-verified)" : "setup required"} · model ${provider.model || "selection required"}`,
 );
+
 const encryption =
   Buffer.from(process.env.TOKEN_ENCRYPTION_KEY || "", "base64").length === 32;
 console.log(

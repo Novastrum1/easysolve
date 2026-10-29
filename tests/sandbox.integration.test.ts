@@ -30,7 +30,7 @@ it("runs actual commands as non-root, denies network and host paths, captures fa
     const env = JSON.parse(
       await s.op({
         type: "test",
-        command: "id -u; printenv DEEPSEEK_API_KEY; printenv DATABASE_URL",
+        command: "id -u; printenv OPENAI_API_KEY; printenv DATABASE_URL",
       }),
     );
     expect(env.stdout).toContain("10001");

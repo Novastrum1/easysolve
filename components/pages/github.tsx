@@ -215,7 +215,7 @@ export function DiscoverPage(c: Context) {
               Add to my issues
             </Button>
           </div>
-          <div className="action-row"><Button variant="secondary" busy={busy} disabled={!c.data.health.deepseek} onClick={async()=>{setBusy(true);try{const r=await c.act('issues/analyze',{identityId:c.identity,repo:issue.repo,number:issue.number});setAnalysis(r.analysis);}catch{}finally{setBusy(false);}}}><Sparkles size={15}/>Analyze issue</Button></div>{analysis&&<div className="issue-description" aria-label="AI issue analysis">{analysis}</div>}
+          <div className="action-row"><Button variant="secondary" busy={busy} disabled={!c.data.health.ai} onClick={async()=>{setBusy(true);try{const r=await c.act('issues/analyze',{identityId:c.identity,repo:issue.repo,number:issue.number});setAnalysis(r.analysis);}catch{}finally{setBusy(false);}}}><Sparkles size={15}/>Analyze issue</Button></div>{analysis&&<div className="issue-description" aria-label="AI issue analysis">{analysis}</div>}
           {!draft ? (
             <>
               <Field
@@ -231,7 +231,7 @@ export function DiscoverPage(c: Context) {
               </Field>
               <Button
                 busy={busy}
-                disabled={!c.data.health.deepseek}
+                disabled={!c.data.health.ai}
                 onClick={async () => {
                   setBusy(true);
                   try {
@@ -450,7 +450,7 @@ export function WavePage(c: Context) {
             <Button
               type="submit"
               busy={busy}
-              disabled={!c.identity || !c.data.health.deepseek}
+              disabled={!c.identity || !c.data.health.ai}
             >
               <Sparkles size={16} />
               Prepare applications

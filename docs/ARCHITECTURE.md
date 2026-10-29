@@ -1,6 +1,6 @@
 # Architecture
 
-EasySolve uses TypeScript, Next.js App Router, React, PostgreSQL, Prisma 7 with the official PostgreSQL adapter, and the OpenAI SDK configured for DeepSeek. Styling is a shared CSS component system; Lucide supplies icons. Instrument Sans, Figtree, and IBM Plex Mono load through Google Fonts with system fallbacks. There are no copied product assets or private APIs.
+EasySolve uses TypeScript, Next.js App Router, React, PostgreSQL, Prisma 7 with the official PostgreSQL adapter, and the OpenAI SDK with separate AgentRouter Chat Completions and direct OpenAI Responses adapters. Styling is a shared CSS component system; Lucide supplies icons. Instrument Sans, Figtree, and IBM Plex Mono load through Google Fonts with system fallbacks. There are no copied product assets or private APIs.
 
 ## Boundaries
 
@@ -11,7 +11,7 @@ EasySolve uses TypeScript, Next.js App Router, React, PostgreSQL, Prisma 7 with 
 - `lib/routes/`: account/auth, bootstrap, repository, run, contribution, and review endpoint handlers.
 - `lib/security.ts`: hashed sessions, AES-GCM token encryption, origin checks, public errors, patch fingerprints.
 - `lib/github.ts`: authenticated server-only GitHub requests, pagination, issue/repository synchronization, PR review-state derivation.
-- `lib/providers/deepseek.ts`: streamed DeepSeek Responses adapter, final receipt validation, and redacted provider errors.
+- `lib/providers/openai.ts`: streamed OpenAI Responses adapter, final receipt validation, and redacted provider errors.
 - `lib/ai.ts`: provider integration, serialized per-user allowance checks, actual usage persistence, configurable model.
 - `lib/chat.ts`, `lib/chat-tools.ts`: persistent conversations and function-tool dispatch. Read results use owned records. Run/sync actions are previews until confirmed. Assignment tools validate proposals but never apply assignments automatically.
 - `lib/assignments.ts`, `lib/wave.ts`: assignment validation and partial results; grounded issue matching and application drafting.
@@ -68,3 +68,5 @@ Bulk merge is a confirmed sequence, not an all-or-nothing GitHub transaction. Ev
 Sessions are random 256-bit secrets; only hashes are stored. Cookies are HttpOnly, SameSite=Lax and Secure in production. State-changing endpoints require the exact configured Origin. Passwords use bcrypt; reset tokens are short-lived and single-use; password changes revoke other sessions. Zod validates domain inputs. Rate windows persist in PostgreSQL. Untrusted issue/repository/model text is rendered as text, never injected HTML.
 
 Docker isolation is a useful local boundary, not a guarantee against kernel exploits. Operate workers on dedicated hosts/VMs with a trusted Docker service. The web process does not require Docker access. Do not mount a production Docker socket into the web app. A hardened public service should use a dedicated sandbox service or microVM pool, remote secret management, centralized audit/monitoring, and independent security review.
+
+`lib/providers/index.ts` selects exactly one server-configured provider. Both web and worker share this dispatch and usage accounting. AgentRouter requires a matching token-scoped catalog ID and never falls back to direct OpenAI. Provider verification is bound to provider, credential, base URL and model. Historical provider usage is unchanged.

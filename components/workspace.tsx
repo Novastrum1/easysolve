@@ -1,64 +1,64 @@
 "use client";
 import {
-Activity,
-ArrowRight,
-Check,
-CheckCheck,
-ChevronRight,
-CircleHelp,
-CreditCard,
-FolderGit2,
-GitBranch,
-GitPullRequest,
-Github,
-LayoutDashboard,
-ListChecks,
-LogOut,
-Menu,
-MessageSquare,
-Moon,
-PanelLeftClose,
-Plus,
-Search,
-Settings2,
-ShieldCheck,
-Sparkles,
-Sun,
-Terminal,
-Users,
-Waves,
-X,
-Zap,
+  Activity,
+  ArrowRight,
+  Check,
+  CheckCheck,
+  ChevronRight,
+  CircleHelp,
+  CreditCard,
+  FolderGit2,
+  GitBranch,
+  GitPullRequest,
+  Github,
+  LayoutDashboard,
+  ListChecks,
+  LogOut,
+  Menu,
+  MessageSquare,
+  Moon,
+  PanelLeftClose,
+  Plus,
+  Search,
+  Settings2,
+  ShieldCheck,
+  Sparkles,
+  Sun,
+  Terminal,
+  Users,
+  Waves,
+  X,
+  Zap,
 } from "lucide-react";
 import Link from "next/link";
-import { usePathname,useRouter } from "next/navigation";
-import { useCallback,useEffect,useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { useCallback, useEffect, useState } from "react";
 import { MaintainerDetails } from "./pages/maintainer";
 import {
-Badge,
-Button,
-Empty,
-Field,
-Modal,
-Panel,
-SearchBox,
-Select,
-request,
+  Badge,
+  Button,
+  Empty,
+  Field,
+  Modal,
+  Panel,
+  SearchBox,
+  Select,
+  request,
 } from "./ui";
 import {
-AccountPage,
-AssignmentsPage,
-BillingPage,
-ChatPage,
-DiscoverPage,
-IssuesPage,
-RepositoriesPage,
-ReviewPage,
-RunPage,
-RunsPage,
-SettingsPage,
-UsagePage,
-WavePage,
+  AccountPage,
+  AssignmentsPage,
+  BillingPage,
+  ChatPage,
+  DiscoverPage,
+  IssuesPage,
+  RepositoriesPage,
+  ReviewPage,
+  RunPage,
+  RunsPage,
+  SettingsPage,
+  UsagePage,
+  WavePage,
 } from "./workflows";
 export type Data = any;
 export type Context = {
@@ -304,13 +304,13 @@ export function Workspace() {
         </nav>
         <div className="sidebar-bottom">
           <div className="agent-status">
-            <span
-              className={data.health.deepseek ? "online-dot" : "offline-dot"}
-            />
+            <span className={data.health.ai ? "online-dot" : "offline-dot"} />
             <span>
-              {data.health.deepseek ? "DeepSeek configured" : "Connect your AI"}
+              {data.health.ai
+                ? `${data.health.provider.name} configured`
+                : `${data.health.provider.name} setup required`}
               <small>
-                {data.health.deepseek
+                {data.health.ai
                   ? "Ready when you are"
                   : "Set up to start solving"}
               </small>
@@ -837,14 +837,15 @@ function Overview(
             <div className="connection-row">
               <Sparkles size={21} />
               <div>
-                <strong>DeepSeek</strong>
+                <strong>
+                  {d.health.provider.name} ·{" "}
+                  {d.health.provider.modelName || "Model selection required"}
+                </strong>
                 <small>
-                  {d.health.deepseek ? "API key configured" : "API key required"}
+                  {d.health.ai ? "API key configured" : "API key required"}
                 </small>
               </div>
-              <span
-                className={`connection-dot ${d.health.deepseek ? "on" : ""}`}
-              />
+              <span className={`connection-dot ${d.health.ai ? "on" : ""}`} />
             </div>
             <a className="panel-bottom-link" href="/account">
               Manage connections

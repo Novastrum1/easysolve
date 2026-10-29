@@ -1,0 +1,36 @@
+{
+  "at": "2026-10-29T08:02:13.708Z",
+  "provider": "agentrouter",
+  "model": "gpt-6-astra",
+  "models": [],
+  "astraAvailable": null,
+  "workflows": [
+    {
+      "name": "authenticated model catalog",
+      "status": "failed",
+      "code": "AI_AUTHENTICATION",
+      "detail": "AgentRouter rejected the gateway token or client access. Check AGENTROUTER_API_KEY in the server environment and confirm API/client authorization with AgentRouter support."
+    },
+    {
+      "name": "streamed Chat Completions and actual usage",
+      "status": "blocked",
+      "detail": "Authentication or model availability must be resolved first."
+    },
+    {
+      "name": "harmless query_issues function workflow",
+      "status": "blocked",
+      "detail": "Authentication or model availability must be resolved first."
+    },
+    {
+      "name": "strict structured output",
+      "status": "blocked",
+      "detail": "Authentication or model availability must be resolved first."
+    },
+    {
+      "name": "Responses API",
+      "status": "unverified",
+      "detail": "The current official co.agentrouter.org guide documents Chat Completions. Responses support is not established; EasySolve uses the documented chat endpoint."
+    }
+  ],
+  "usage": []
+}

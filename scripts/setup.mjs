@@ -2,12 +2,20 @@ import fs from "node:fs";
 import crypto from "node:crypto";
 import { execFileSync } from "node:child_process";
 if (!fs.existsSync(".env")) {
+  const dbPassword = crypto.randomBytes(24).toString("hex");
   let env = fs
     .readFileSync(".env.example", "utf8")
     .replace(
       "TOKEN_ENCRYPTION_KEY=",
       "TOKEN_ENCRYPTION_KEY=" + crypto.randomBytes(32).toString("base64"),
     );
+  env = env
+    .replace(
+      "DATABASE_URL=",
+      `DATABASE_URL=postgresql://easysolve:${dbPassword}@localhost:5432/easysolve`,
+    )
+    .replace("POSTGRES_PASSWORD=", `POSTGRES_PASSWORD=${dbPassword}`)
+    .replace("APP_URL=", "APP_URL=http://localhost:3000");
   if (process.env.CODESPACE_NAME)
     env = env.replace(
       "APP_URL=http://localhost:3000",
@@ -26,5 +34,5 @@ for (const [bin, args] of [
   execFileSync(bin, args, { stdio: "inherit" });
 }
 console.log(
-  "Ready. Set DEEPSEEK_API_KEY in .env if needed, then npm run start:all. Port 3000 stays private.",
+  "Ready. Configure the selected provider’s private key in .env if needed, then npm run start:all. Port 3000 stays private.",
 );

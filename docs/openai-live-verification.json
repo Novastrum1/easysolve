@@ -1,0 +1,18 @@
+{
+  "provider": "openai",
+  "model": "gpt-6-astra",
+  "at": "2026-10-29T07:17:53.095Z",
+  "workflows": [
+    {
+      "name": "streaming connection and usage receipt",
+      "status": "failed",
+      "detail": "AI_AUTHENTICATION: OpenAI rejected the server API key. Ask the operator to update OPENAI_API_KEY and restart the app and worker."
+    },
+    {
+      "name": "persistent chat response",
+      "status": "blocked",
+      "detail": "Not attempted because the connection request failed authentication."
+    }
+  ],
+  "usage": []
+}

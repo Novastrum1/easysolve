@@ -7,9 +7,18 @@ export const settingsSchema = z.object({
   resetDay: z.number().int().min(1).max(28).default(1),
   resetHour: z.number().int().min(0).max(23).default(0),
   monthlyJobs: z.number().int().min(1).max(10000).default(50),
-  inputPrice: z.number().min(0).default(0),
-  cachedPrice: z.number().min(0).default(0),
-  outputPrice: z.number().min(0).default(0),
+  inputPrice: z
+    .number()
+    .min(0)
+    .default(Number(process.env.OPENAI_INPUT_PRICE_PER_MILLION) || 0),
+  cachedPrice: z
+    .number()
+    .min(0)
+    .default(Number(process.env.OPENAI_CACHED_PRICE_PER_MILLION) || 0),
+  outputPrice: z
+    .number()
+    .min(0)
+    .default(Number(process.env.OPENAI_OUTPUT_PRICE_PER_MILLION) || 0),
 });
 export const settings = (v: unknown) => settingsSchema.parse(v ?? {});
 export function repoName(value: string) {

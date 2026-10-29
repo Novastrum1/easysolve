@@ -1,11 +1,14 @@
+import { ai } from "../ai";
+import { isProviderAdmin, providerStatus } from "../provider-status";
+import { rateLimit } from "../security";
 import bcrypt from "bcryptjs";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "../db";
-import { GitHub,github } from "../github";
+import { GitHub, github } from "../github";
 import { settingsSchema } from "../policy";
-import { encrypt,hash,HttpError,session } from "../security";
+import { encrypt, hash, HttpError, session } from "../security";
 import type { RouteContext } from "./types";
 const id = z.string().min(1).max(100);
 const json = (data: unknown, status = 200) =>
@@ -19,6 +22,21 @@ export async function handleAccount({
 }: RouteContext) {
   const route = path.join("/");
   const method = request.method;
+  if (route === "provider/test") {
+    if (!isProviderAdmin(u.id))
+      throw new HttpError(
+        403,
+        "Only a configured provider administrator can test the shared AI connection.",
+      );
+    await rateLimit(`provider-test:${u.id}`, 2);
+    await ai(
+      u.id,
+      "connection_verification",
+      "Reply with EASYSOLVE_OK only.",
+      "Return the requested marker.",
+    );
+    return json(await providerStatus());
+  }
   if (route === "auth/logout") {
     const c = await cookies();
     const token = c.get("es_session")?.value;

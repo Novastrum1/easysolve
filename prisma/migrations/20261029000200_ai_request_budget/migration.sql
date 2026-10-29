@@ -1,0 +1,8 @@
+CREATE TABLE "AIRequest" (
+ "id" TEXT NOT NULL PRIMARY KEY,
+ "userId" TEXT NOT NULL,
+ "runId" TEXT,
+ "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ CONSTRAINT "AIRequest_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE
+);
+CREATE INDEX "AIRequest_userId_runId_idx" ON "AIRequest"("userId", "runId");

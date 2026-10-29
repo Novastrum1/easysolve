@@ -1,0 +1,14 @@
+{
+  "provider": "deepseek",
+  "model": "deepseek-flash",
+  "at": "2026-10-29T07:10:19.890Z",
+  "workflows": [
+    {
+      "name": "streaming connection and usage receipt",
+      "status": "failed",
+      "detail": "AI_BALANCE"
+    }
+  ],
+  "usage": [],
+  "error": "AI_BALANCE: DeepSeek balance is insufficient. Top up the provider account, then retry."
+}

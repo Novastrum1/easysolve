@@ -4,7 +4,7 @@ No public deployment, repository visibility change, external GitHub write, or pa
 
 ## Production topology
 
-Run a TLS reverse proxy, a Next.js web process, a separate worker service, PostgreSQL, and an isolated worker execution host. Only the reverse proxy exposes the web app. The web process has no Docker socket. The worker needs the database URL, encryption key, DeepSeek credentials, outbound GitHub/DeepSeek HTTPS, and access to a dedicated Docker daemon. Containers created by it have no network or credentials.
+Run a TLS reverse proxy, a Next.js web process, a separate worker service, PostgreSQL, and an isolated worker execution host. Only the reverse proxy exposes the web app. The web process has no Docker socket. The worker needs the database URL, encryption key, OpenAI credentials, outbound GitHub/OpenAI HTTPS, and access to a dedicated Docker daemon. Containers created by it have no network or credentials.
 
 ```bash
 npm ci
@@ -60,3 +60,7 @@ Review merge uses squash; disable or use GitHub directly where repository settin
 ## Updating and verification
 
 Install using the committed lockfile (`npm ci`), generate the client, migrate once per release, and run type checks, unit tests, integration tests against a disposable database, browser tests, and the production build. Build the sandbox image separately. Pin and scan the deployment image digest for production. Keep dependencies patched and test upgrades; never run remote repository install scripts in the web or worker host process.
+
+## Gateway configuration
+
+For AgentRouter, inject `AI_PROVIDER=agentrouter`, `AGENTROUTER_BASE_URL=https://co.agentrouter.org/v1`, `AGENTROUTER_API_KEY` and a verified `AGENTROUTER_MODEL` into both web and worker through the hosting secret manager. Allow outbound HTTPS to co.agentrouter.org. The execution container receives no credentials. Direct OpenAI is separate and optional; do not put a gateway token in OPENAI_API_KEY. See AGENTROUTER.md for the catalog verifier and client-restriction support process. Restart both services after any credential/model change; a database container does not need recreation for provider changes.

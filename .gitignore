@@ -7,3 +7,7 @@ playwright-report
 test-results
 *.tsbuildinfo
 artifacts
+
+.env.*
+!.env.example
+*.log

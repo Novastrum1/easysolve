@@ -1,0 +1,22 @@
+{
+  "at": "2026-10-29T07:48:34.233Z",
+  "provider": "openai",
+  "model": "gpt-6-astra",
+  "maxOutputTokens": 256,
+  "status": "failed",
+  "usage": [],
+  "error": {
+    "code": "AI_AUTHENTICATION",
+    "message": "OpenAI rejected the server API key. Ask the operator to update OPENAI_API_KEY and restart the app and worker.",
+    "status": 503
+  },
+  "environmentAudit": {
+    "source": "/workspaces/easysolve/.env",
+    "inheritedKeyPresent": false,
+    "otherEnvFilesPresent": false,
+    "dockerKeyOverride": false,
+    "rootEnvTracked": false,
+    "rootEnvIgnored": true,
+    "servicesRestarted": true
+  }
+}

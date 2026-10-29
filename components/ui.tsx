@@ -13,7 +13,7 @@ export const label = (s: string) =>
 export function Badge({ status }: { status: string }) {
   return (
     <span
-      className={`badge ${["completed", "done", "connected", "approved", "ready", "applied", "success", "published"].includes(status) ? "green" : ["failed", "blocked", "needs_attention", "failure", "changes_requested"].includes(status) ? "red" : ["running", "in_progress", "queued", "awaiting_review", "pending"].includes(status) ? "amber" : ""}`}
+      className={`badge ${["connection_verified", "completed", "done", "connected", "approved", "ready", "applied", "success", "published"].includes(status) ? "green" : ["failed", "blocked", "needs_attention", "failure", "changes_requested"].includes(status) ? "red" : ["running", "in_progress", "queued", "awaiting_review", "pending"].includes(status) ? "amber" : ""}`}
     >
       <span />
       {label(status)}

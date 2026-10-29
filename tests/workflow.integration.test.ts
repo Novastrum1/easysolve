@@ -176,10 +176,16 @@ describe("durable issue → run → approval → PR workflow", () => {
     const [run] = await startRuns(userId, [i.id]);
     model
       .mockResolvedValueOnce(
-        JSON.stringify({ plan: "Fix sum", action: "read", path: "sum.js" }),
+        JSON.stringify({
+          ...{ path: null, content: null, command: null, summary: null },
+          plan: "Fix sum",
+          action: "read",
+          path: "sum.js",
+        }),
       )
       .mockResolvedValueOnce(
         JSON.stringify({
+          ...{ path: null, content: null, command: null, summary: null },
           plan: "Fix sum",
           action: "write",
           path: "sum.js",
@@ -188,13 +194,18 @@ describe("durable issue → run → approval → PR workflow", () => {
       )
       .mockResolvedValueOnce(
         JSON.stringify({
+          ...{ path: null, content: null, command: null, summary: null },
           plan: "Verify sum",
           action: "test",
           command: "node --test",
         }),
       )
       .mockResolvedValueOnce(
-        JSON.stringify({ plan: "Fix sum", action: "finish" }),
+        JSON.stringify({
+          ...{ path: null, content: null, command: null, summary: null },
+          plan: "Fix sum",
+          action: "finish",
+        }),
       );
     sandbox.op.mockImplementation(async (op: any) =>
       op.type === "test"

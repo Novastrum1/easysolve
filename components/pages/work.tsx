@@ -1,41 +1,41 @@
 "use client";
 import {
-ArrowRight,
-ArrowUp,
-Check,
-Clock,
-FileCode2,
-GitBranch,
-GitPullRequest,
-ListChecks,
-LoaderCircle,
-Mic,
-Play,
-Plus,
-RefreshCw,
-ShieldCheck,
-Sparkles,
-Square,
-Terminal,
-Zap,
+  ArrowRight,
+  ArrowUp,
+  Check,
+  Clock,
+  FileCode2,
+  GitBranch,
+  GitPullRequest,
+  ListChecks,
+  LoaderCircle,
+  Mic,
+  Play,
+  Plus,
+  RefreshCw,
+  ShieldCheck,
+  Sparkles,
+  Square,
+  Terminal,
+  Zap,
 } from "lucide-react";
-import { useEffect,useRef,useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
-Badge,
-Button,
-Diff,
-Empty,
-External,
-Field,
-Modal,
-Panel,
-SearchBox,
-Select,
-label,
-request,
+  Badge,
+  Button,
+  Diff,
+  Empty,
+  External,
+  Field,
+  Modal,
+  Panel,
+  SearchBox,
+  Select,
+  label,
+  request,
 } from "../ui";
 import type { Context } from "../workspace";
-import { Identity,PageHead } from "../workspace";
+import { Identity, PageHead } from "../workspace";
 export function ChatPage(c: Context) {
   const [conversation, setConversation] = useState("default");
   const messages = c.data.messages.filter(
@@ -257,9 +257,9 @@ export function ChatPage(c: Context) {
         <div>
           <span>
             <span className="online-dot" />
-            {c.data.health.deepseek
-              ? "DeepSeek configured"
-              : "DeepSeek setup required"}
+            {c.data.health.ai
+              ? `${c.data.health.provider.name} configured`
+              : `${c.data.health.provider.name} setup required`}
           </span>
           <div>
             <button
@@ -272,7 +272,7 @@ export function ChatPage(c: Context) {
             </button>
             <Button
               busy={busy}
-              disabled={!text.trim() || !c.data.health.deepseek}
+              disabled={!text.trim() || !c.data.health.ai}
               onClick={() => void send()}
               aria-label="Send message"
             >
