@@ -1,5 +1,9 @@
 "use client";
 import Link from "next/link";
+import {
+  BillingAdministration,
+  UserEntitlementControls,
+} from "./billing-admin";
 import { useCallback, useEffect, useState } from "react";
 import { Badge, Button, Field, request } from "./ui";
 import styles from "./admin-dashboard.module.css";
@@ -47,11 +51,20 @@ type Audit = {
   actorId: string;
   targetId: string;
   action: string;
+  reason: string;
+  oldValues: unknown;
+  newValues: unknown;
   details: unknown;
   createdAt: string;
 };
 type List<T> = { items: T[]; total: number; page: number; pageSize: number };
 type Overview = {
+  basicUsers: number;
+  activePro: number;
+  successfulSolves: number;
+  verifiedRevenue: string;
+  invoiceGroups: { status: string; _count: number }[];
+  paymentGroups: { network: string; status: string; _count: number }[];
   users: number;
   workspaces: number;
   suspended: number;
@@ -67,6 +80,7 @@ type Overview = {
     _count: number;
   }[];
   provider: {
+    region?: string | null;
     name?: string;
     model?: string;
     configured: boolean;
@@ -272,12 +286,31 @@ export function AdminDashboard({ ownerName }: { ownerName: string }) {
           {notice}
         </p>
       )}
+      <BillingAdministration />
       {loading && <p role="status">Loading administration…</p>}
       {tab === "overview" && overview && (
         <>
+          <p>
+            Verified mainnet revenue: {overview.verifiedRevenue} USDC · Testnet
+            receipts are not revenue.
+          </p>
+          <p>
+            {overview.paymentGroups
+              ?.map((g) => `${g.network} ${g.status}: ${g._count}`)
+              .join(" · ")}
+          </p>
+          <p>
+            Invoices:{" "}
+            {overview.invoiceGroups
+              ?.map((g) => `${g.status}: ${g._count}`)
+              .join(" · ")}
+          </p>
           <section className={styles.grid} aria-label="Service summaries">
             {[
               ["Users", overview.users],
+              ["Basic users", overview.basicUsers],
+              ["Active EasySolve Pro", overview.activePro],
+              ["Successfully solved issues", overview.successfulSolves],
               ["Workspaces", overview.workspaces],
               ["Suspended accounts", overview.suspended],
               ["Repositories", overview.repositories],
@@ -298,6 +331,7 @@ export function AdminDashboard({ ownerName }: { ownerName: string }) {
             <p>
               {overview.provider.name ?? "Provider"} ·{" "}
               {overview.provider.model || "Model not selected"}
+              {overview.provider.region && ` · ${overview.provider.region}`}
             </p>
             <p>
               {overview.provider.configured
@@ -442,6 +476,12 @@ export function AdminDashboard({ ownerName }: { ownerName: string }) {
             </section>
           )}
           {account && (
+            <UserEntitlementControls
+              userId={account.id}
+              onSaved={() => void openAccount(account.id)}
+            />
+          )}
+          {account && (
             <section className={styles.panel} aria-label="Account details">
               <h2>{account.name}</h2>
               <p>
@@ -479,6 +519,7 @@ export function AdminDashboard({ ownerName }: { ownerName: string }) {
                     {
                       planName: planName.trim() || null,
                       planMaxJobs: planJobs === "" ? null : Number(planJobs),
+                      reason,
                       planMaxTokens:
                         planTokens === "" ? null : Number(planTokens),
                     },
@@ -516,6 +557,14 @@ export function AdminDashboard({ ownerName }: { ownerName: string }) {
                     step="1"
                     value={planTokens}
                     onChange={(e) => setPlanTokens(e.target.value)}
+                  />
+                </Field>
+                <Field label="Budget change reason">
+                  <input
+                    required
+                    minLength={3}
+                    value={reason}
+                    onChange={(e) => setReason(e.target.value)}
                   />
                 </Field>
                 <Button type="submit" busy={busy}>
@@ -736,7 +785,18 @@ export function AdminDashboard({ ownerName }: { ownerName: string }) {
                     <td>
                       <details>
                         <summary>View change details</summary>
-                        <pre>{JSON.stringify(entry.details, null, 2)}</pre>
+                        <pre>
+                          {JSON.stringify(
+                            {
+                              reason: entry.reason,
+                              oldValues: entry.oldValues,
+                              newValues: entry.newValues,
+                              details: entry.details,
+                            },
+                            null,
+                            2,
+                          )}
+                        </pre>
                       </details>
                     </td>
                   </tr>

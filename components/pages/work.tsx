@@ -51,17 +51,32 @@ export function ChatPage(c: Context) {
     () => end.current?.scrollIntoView({ behavior: "smooth" }),
     [c.data.messages.length],
   );
-  const send = async (prompt = text) => {
+  const pending = useRef<{
+    text: string;
+    id: string;
+    conversation: string;
+  } | null>(null);
+  const send = async (prompt = text, retryId?: string) => {
     if (!prompt.trim() || busy) return;
+    const requestId =
+      retryId ??
+      (pending.current?.text === prompt &&
+      pending.current.conversation === conversation
+        ? pending.current.id
+        : crypto.randomUUID());
+    pending.current = { text: prompt, id: requestId, conversation };
     setBusy(true);
     setText("");
     try {
       await c.act("chat", {
         text: prompt,
+        requestId,
         identityId: c.identity,
         conversation,
       });
+      pending.current = null;
     } catch {
+      await c.refresh();
       setText(prompt);
     } finally {
       setBusy(false);
@@ -204,7 +219,15 @@ export function ChatPage(c: Context) {
                         <Terminal size={15} />
                         <strong>{a.label}</strong>
                       </div>
-                      {a.type === "confirmation" ? (
+                      {a.type === "error" ? (
+                        <Button
+                          variant="secondary"
+                          disabled={busy}
+                          onClick={() => void send(m.content, m.id)}
+                        >
+                          Retry
+                        </Button>
+                      ) : a.type === "confirmation" ? (
                         <>
                           <small>
                             Review this action before continuing. GitHub writes
@@ -256,10 +279,18 @@ export function ChatPage(c: Context) {
         />
         <div>
           <span>
-            <span className="online-dot" />
-            {c.data.health.ai
-              ? `${c.data.health.provider.name} configured`
-              : `${c.data.health.provider.name} setup required`}
+            <span
+              className={
+                c.data.health.provider.verified ? "online-dot" : "offline-dot"
+              }
+            />
+            {c.data.health.provider.connectionFailed
+              ? `${c.data.health.provider.name} connection failed`
+              : c.data.health.provider.verified
+                ? `${c.data.health.provider.name} verified`
+                : c.data.health.ai
+                  ? `${c.data.health.provider.name} configured`
+                  : `${c.data.health.provider.name} setup required`}
           </span>
           <div>
             <button

@@ -1,8 +1,15 @@
+import { entitlementSummary } from "../entitlements";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { providerStatus, isProviderAdmin } from "../provider-status";
 import { db } from "../db";
-import { allowanceWindow, monthStart, nextMonth, settings, planLimits } from "../policy";
+import {
+  allowanceWindow,
+  monthStart,
+  nextMonth,
+  settings,
+  planLimits,
+} from "../policy";
 import type { RouteContext } from "./types";
 const id = z.string().min(1).max(100);
 const json = (data: unknown, status = 200) =>
@@ -34,6 +41,7 @@ export async function handleBootstrap({
           id: true,
           login: true,
           active: true,
+          usable: true,
           status: true,
           syncedAt: true,
         },
@@ -98,6 +106,7 @@ export async function handleBootstrap({
       _sum: { total: true },
     });
     const provider = await providerStatus();
+    const entitlements = await entitlementSummary(u.id);
     return json({
       allowance: {
         start: window.start,
@@ -131,7 +140,8 @@ export async function handleBootstrap({
         tokens: planLimits(u).tokens,
         reset: nextMonth(),
       },
-      plan: planLimits(u).name,
+      plan: entitlements.name,
+      entitlements,
     });
   }
   return undefined;

@@ -1,14 +1,14 @@
-import {analyzeIssue,draftApplication} from "../issue-analysis";
+import { analyzeIssue, draftApplication } from "../issue-analysis";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { ai } from "../ai";
-import { applyProposal,propose } from "../assignments";
-import { chat,chatAction } from "../chat";
+import { applyProposal, propose } from "../assignments";
+import { chat, chatAction } from "../chat";
 import { db } from "../db";
 import { github } from "../github";
 import { repoName } from "../policy";
 import { HttpError } from "../security";
-import { prepareWave,waveSchema } from "../wave";
+import { prepareWave, waveSchema } from "../wave";
 import type { RouteContext } from "./types";
 const id = z.string().min(1).max(100);
 const json = (data: unknown, status = 200) =>
@@ -46,13 +46,42 @@ export async function handleContribution({
         z.string().min(1).max(10000).parse(body.text),
         body.identityId,
         body.conversation ? id.parse(body.conversation) : "default",
+        body.requestId ? id.parse(body.requestId) : undefined,
       ),
     );
   if (route === "chat/confirm")
-    return json(await chatAction(u.id, id.parse(body.messageId),body.activityIndex===undefined?undefined:z.number().int().nonnegative().parse(body.activityIndex)));
+    return json(
+      await chatAction(
+        u.id,
+        id.parse(body.messageId),
+        body.activityIndex === undefined
+          ? undefined
+          : z.number().int().nonnegative().parse(body.activityIndex),
+      ),
+    );
   if (route === "wave/prepare")
     return json(await prepareWave(u.id, waveSchema.parse(body)));
-  if(route==='issues/analyze'){const input=z.object({identityId:id,repo:z.string(),number:z.number().int().positive()}).parse(body);const repo=repoName(input.repo);const issue=await(await github(u.id,input.identityId)).request(`/repos/${repo}/issues/${input.number}`);return json({analysis:await analyzeIssue(u.id,{repo,number:issue.number,title:issue.title,body:issue.body??''})});}
+  if (route === "issues/analyze") {
+    const input = z
+      .object({
+        identityId: id,
+        repo: z.string(),
+        number: z.number().int().positive(),
+      })
+      .parse(body);
+    const repo = repoName(input.repo);
+    const issue = await (
+      await github(u.id, input.identityId)
+    ).request(`/repos/${repo}/issues/${input.number}`);
+    return json({
+      analysis: await analyzeIssue(u.id, {
+        repo,
+        number: issue.number,
+        title: issue.title,
+        body: issue.body ?? "",
+      }),
+    });
+  }
   if (route === "applications/draft") {
     const input = z
       .object({
@@ -69,7 +98,17 @@ export async function handleContribution({
     const issue = await (
       await github(u.id, input.identityId)
     ).request(`/repos/${repo}/issues/${input.number}`);
-    const draft=await draftApplication(u.id,{repo,number:issue.number,title:issue.title,body:issue.body??''},input.experience,{complexity:input.complexity,languages:input.languages});
+    const draft = await draftApplication(
+      u.id,
+      {
+        repo,
+        number: issue.number,
+        title: issue.title,
+        body: issue.body ?? "",
+      },
+      input.experience,
+      { complexity: input.complexity, languages: input.languages },
+    );
     return json(
       await db.application.create({
         data: {

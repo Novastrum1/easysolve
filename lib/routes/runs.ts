@@ -1,7 +1,8 @@
+import { releaseRun, reserveIssues } from "../entitlements";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "../db";
-import { approveRun,startRuns } from "../queue";
+import { approveRun, startRuns } from "../queue";
 import { HttpError } from "../security";
 import type { RouteContext } from "./types";
 const id = z.string().min(1).max(100);
@@ -35,6 +36,7 @@ export async function handleRuns({
     }
     if (path[2] === "cancel") {
       await db.$transaction(async (tx) => {
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${u.id}))`;
         await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`run:${run.id}`}))`;
         const current = await tx.run.findUniqueOrThrow({
           where: { id: run.id },
@@ -45,6 +47,7 @@ export async function handleRuns({
           )
         )
           throw new HttpError(409, "This run can no longer be cancelled");
+        await releaseRun(run.id, tx);
         await tx.run.update({
           where: { id: run.id },
           data: { status: "cancelled", finishedAt: new Date() },
@@ -72,6 +75,9 @@ export async function handleRuns({
         throw new HttpError(409, "Run cannot be retried in this state");
       await db.$transaction(async (tx) => {
         await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${u.id}))`;
+        if (run.mode !== "plan")
+          await reserveIssues(tx, u.id, run.id, run.issueIds as string[]);
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${u.id}))`;
         await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`run:${run.id}`}))`;
         const current = await tx.run.findUniqueOrThrow({
           where: { id: run.id },
@@ -81,6 +87,7 @@ export async function handleRuns({
         )
           throw new HttpError(409, "Run changed during retry");
         const ids = run.issueIds as string[];
+        if (run.mode !== "plan") await reserveIssues(tx, u.id, run.id, ids);
         const others = await tx.run.findMany({
           where: {
             userId: u.id,

@@ -1,4 +1,4 @@
-import "dotenv/config";
+import "../lib/load-env";
 import { writeFile } from "node:fs/promises";
 import { db } from "../lib/db";
 import { ai } from "../lib/ai";
@@ -9,18 +9,27 @@ const config = providerConfig();
 const report: {
   provider: string;
   model: string;
+  region?: string;
   at: string;
   workflows: { name: string; status: string; detail?: string }[];
   usage: unknown[];
 } = {
   provider: config.id,
   model: config.model,
+  region: "region" in config ? config.region : undefined,
   at: new Date().toISOString(),
   workflows: [],
   usage: [],
 };
 let userId = "";
 try {
+  if (!config.configured)
+    throw new AIProviderError(
+      "AI_CONFIGURATION",
+      "Complete the selected provider configuration before live verification.",
+      503,
+    );
+  process.env.AI_MAX_OUTPUT_TOKENS = "128";
   userId = (
     await db.user.create({
       data: {
@@ -57,6 +66,22 @@ try {
           throw Error("Chat was not persisted");
       },
     ],
+    [
+      "harmless workspace tool call",
+      async () => {
+        const result = await chat(
+          userId,
+          "Use the check_jobs tool to read my current run status. Do not request any other action.",
+          undefined,
+          "tool-verification",
+        );
+        if (
+          !Array.isArray(result.activity) ||
+          !result.activity.some((a: any) => a.label === "Checked run status")
+        )
+          throw Error("Expected read-only tool call was not returned");
+      },
+    ],
   ] as const) {
     try {
       await action();
@@ -75,15 +100,16 @@ try {
       break;
     }
   }
-  if (
-    report.workflows.length === 1 &&
-    report.workflows[0].status === "failed"
-  ) {
-    report.workflows.push({
-      name: "persistent chat response",
-      status: "blocked",
-      detail: "Not attempted because the connection request failed.",
-    });
+  for (const name of [
+    "persistent chat response",
+    "harmless workspace tool call",
+  ]) {
+    if (!report.workflows.some((w) => w.name === name))
+      report.workflows.push({
+        name,
+        status: "blocked",
+        detail: "Not attempted because an earlier verification failed.",
+      });
   }
 } catch (error) {
   report.workflows.push({

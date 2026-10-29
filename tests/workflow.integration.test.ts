@@ -47,6 +47,7 @@ beforeAll(async () => {
   userId = (
     await db.user.create({
       data: {
+        issueLimitOverride: 100,
         email: `integration-${crypto.randomUUID()}@example.test`,
         name: "Integration fixture",
         password: "not-a-real-password",

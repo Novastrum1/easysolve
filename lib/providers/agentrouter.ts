@@ -123,6 +123,12 @@ function client() {
       "AgentRouter is not configured. Set AGENTROUTER_API_KEY privately on the server and restart web and worker.",
       503,
     );
+  if (key === process.env.AWS_BEARER_TOKEN_BEDROCK?.trim())
+    throw new AIProviderError(
+      "AI_CREDENTIAL_SCOPE",
+      "A Bedrock bearer key cannot be used with AgentRouter.",
+      503,
+    );
   return {
     config,
     sdk: new OpenAI({

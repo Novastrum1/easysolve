@@ -1,10 +1,10 @@
 import { cookies } from "next/headers";
 import {
-createCipheriv,
-createDecipheriv,
-createHash,
-randomBytes,
-timingSafeEqual,
+  createCipheriv,
+  createDecipheriv,
+  createHash,
+  randomBytes,
+  timingSafeEqual,
 } from "node:crypto";
 import { db } from "./db";
 export class HttpError extends Error {
@@ -53,12 +53,17 @@ export async function user() {
   });
   if (!s || s.expiresAt < new Date())
     throw new HttpError(401, "Session expired. Please sign in.");
-  if (s.user.suspendedAt) throw new HttpError(403, "This account is suspended. Contact the operator.");
+  if (s.user.suspendedAt)
+    throw new HttpError(
+      403,
+      "This account is suspended. Contact the operator.",
+    );
   return s.user;
 }
 export async function requireAdmin() {
   const u = await user();
-  if (u.role !== "ADMIN") throw new HttpError(403, "Administrator access required");
+  if (u.role !== "ADMIN")
+    throw new HttpError(403, "Administrator access required");
   return u;
 }
 export async function session(userId: string) {
@@ -83,15 +88,22 @@ export async function session(userId: string) {
 export function csrf(request: Request) {
   const origin = request.headers.get("origin");
   const expected = process.env.APP_URL || new URL(request.url).origin;
-  if (!origin || origin !== expected)
+  if (
+    !origin ||
+    ![expected, process.env.ADMIN_ORIGIN].filter(Boolean).includes(origin)
+  )
     throw new HttpError(403, "Request origin rejected");
 }
-export async function rateLimit(key: string, limit = 30) {
+export async function rateLimit(key: string, limit = 30, windowSeconds = 60) {
   const now = new Date();
   await db.rateLimit.deleteMany({ where: { key, expiresAt: { lt: now } } });
   const record = await db.rateLimit.upsert({
     where: { key },
-    create: { key, count: 1, expiresAt: new Date(Date.now() + 60000) },
+    create: {
+      key,
+      count: 1,
+      expiresAt: new Date(Date.now() + windowSeconds * 1000),
+    },
     update: { count: { increment: 1 } },
   });
   if (record.count > limit)

@@ -123,7 +123,7 @@ export const usageSchema = z
       u.total_tokens === u.input_tokens + u.output_tokens,
   );
 export type Generation = {
-  provider: "openai" | "agentrouter";
+  provider: "openai" | "agentrouter" | "bedrock";
   model: string;
   text: string;
   calls: { name: string; arguments: string }[];
@@ -145,7 +145,10 @@ export async function generateOpenAI(input: {
       "OpenAI is not configured. Ask the operator to set OPENAI_API_KEY on the server and restart the app and worker.",
       503,
     );
-  if (key === process.env.AGENTROUTER_API_KEY?.trim())
+  if (
+    key === process.env.AGENTROUTER_API_KEY?.trim() ||
+    key === process.env.AWS_BEARER_TOKEN_BEDROCK?.trim()
+  )
     throw new AIProviderError(
       "AI_CREDENTIAL_SCOPE",
       "The configured direct OpenAI key matches the AgentRouter token. Configure a separate OpenAI credential; gateway tokens are never sent to api.openai.com.",

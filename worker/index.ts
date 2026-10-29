@@ -1,4 +1,6 @@
-import "dotenv/config";
+import { entitlementSummary } from "../lib/entitlements";
+import { reconcilePayments } from "../lib/billing";
+import "../lib/load-env";
 import { AIProviderError } from "../lib/providers/openai";
 import { AllowanceError } from "../lib/ai";
 import { db } from "../lib/db";
@@ -6,16 +8,19 @@ import { syncIssues, syncRepositoryStats } from "../lib/github";
 import { settings } from "../lib/policy";
 import { claimJob, enqueue } from "../lib/queue";
 import { executeRun, publish } from "./agent";
+import { recordProviderRuntime } from "../lib/provider-runtime";
 let stopped = false;
 process.on("SIGTERM", () => (stopped = true));
 process.on("SIGINT", () => (stopped = true));
 async function tick() {
+  await reconcilePayments();
   await db.session.deleteMany({ where: { expiresAt: { lt: new Date() } } });
   await db.reset.deleteMany({ where: { expiresAt: { lt: new Date() } } });
   await db.rateLimit.deleteMany({ where: { expiresAt: { lt: new Date() } } });
   const identities = await db.identity.findMany({
     where: {
       active: true,
+      usable: true,
       user: { suspendedAt: null },
       OR: [
         { syncedAt: null },
@@ -25,7 +30,10 @@ async function tick() {
     include: { user: true },
   });
   for (const i of identities)
-    if (settings(i.user.settings).autosync)
+    if (
+      settings(i.user.settings).autosync &&
+      !(await entitlementSummary(i.userId)).selectionRequired
+    )
       await enqueue(
         i.userId,
         "sync",
@@ -37,7 +45,18 @@ async function tick() {
     include: { user: true },
   });
   for (const r of repositories)
-    if (settings(r.user.settings).autosync)
+    if (
+      settings(r.user.settings).autosync &&
+      (await db.identity.count({
+        where: {
+          id: r.identityId,
+          userId: r.userId,
+          active: true,
+          usable: true,
+        },
+      })) &&
+      !(await entitlementSummary(r.userId)).selectionRequired
+    )
       await enqueue(
         r.userId,
         "repository_sync",
@@ -46,6 +65,7 @@ async function tick() {
       );
 }
 async function main() {
+  await recordProviderRuntime("worker");
   let last = 0;
   console.log(
     "EasySolve worker online; PostgreSQL durable queue, concurrency=1",
@@ -70,7 +90,9 @@ async function main() {
           .catch(() => {});
       }, 30000);
       try {
-        const account = await db.user.findUniqueOrThrow({ where: { id: job.userId } });
+        const account = await db.user.findUniqueOrThrow({
+          where: { id: job.userId },
+        });
         if (account.suspendedAt) throw new Error("Account suspended");
         const p = job.payload as {
           runId: string;

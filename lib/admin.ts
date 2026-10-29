@@ -1,3 +1,4 @@
+import { releaseRun, reserveIssues } from "./entitlements";
 import type { Prisma } from "@prisma/client";
 import { db } from "./db";
 import { HttpError } from "./security";
@@ -89,6 +90,9 @@ export async function bootstrapAdmin(selector: {
         actorId: account.id,
         targetId: account.id,
         action: "owner.bootstrap",
+        reason: "Trusted server operator promoted an existing account",
+        oldValues: { role: "USER" },
+        newValues: { role: "ADMIN" },
         details: { from: "USER", to: "ADMIN", source: "server-cli" },
       },
     });
@@ -133,6 +137,7 @@ export async function adminJobAction(
     if (!updated.count)
       throw new HttpError(409, "Job changed; refresh before trying again");
     if (run) {
+      await releaseRun(run.id, tx);
       await tx.run.update({
         where: { id: run.id },
         data: {
@@ -182,6 +187,7 @@ export async function adminJobAction(
       if (!run || !["failed", "cancelled"].includes(run.status))
         throw new HttpError(409, "Run cannot be retried in this state");
       const ids = run.issueIds as string[];
+      if (run.mode !== "plan") await reserveIssues(tx, job.userId, run.id, ids);
       const others = await tx.run.findMany({
         where: {
           userId: job.userId,

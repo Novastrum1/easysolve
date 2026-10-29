@@ -2,7 +2,7 @@
 
 **From issue to reviewed pull request.**
 
-A self-hosted GitHub coding-agent application with a Next.js interface, PostgreSQL persistence, a durable worker, AgentRouter Chat Completions and optional direct OpenAI Responses integration, and isolated Docker execution. The interface includes contributor and maintainer workflows, original branding, dark/light themes, and responsive navigation. There are no simulated live issues, runs, usage figures, or provider connections.
+A self-hosted GitHub coding-agent application with a Next.js interface, PostgreSQL persistence, a durable worker, Amazon Bedrock ConverseStream and optional AgentRouter/direct OpenAI adapters, and isolated Docker execution. The interface includes contributor and maintainer workflows, original branding, dark/light themes, and responsive navigation. There are no simulated live issues, runs, usage figures, or provider connections.
 
 ## Start in Codespaces or locally
 
@@ -16,7 +16,7 @@ npm run start:all
 
 `setup` creates a private `.env` with a random encryption key if it does not exist, starts PostgreSQL, generates Prisma Client, applies migrations, and builds the sandbox image. `start:all` starts both the web app and durable worker. Open port **3000**. The web server binds `0.0.0.0`; PostgreSQL is bound to localhost:5432 only. No Redis is required: the queue uses PostgreSQL row locks, leases, and unique idempotency keys.
 
-Create your account in the application. Connect GitHub in **Account**. Set `AI_PROVIDER=agentrouter`, `AGENTROUTER_BASE_URL=https://co.agentrouter.org/v1`, `AGENTROUTER_API_KEY` and a catalog-verified `AGENTROUTER_MODEL` in the private root `.env`, then restart the app and worker. Direct OpenAI remains optional with `AI_PROVIDER=openai` and a separate `OPENAI_API_KEY`. GitHub workflows work without an AI key. Key presence alone does not verify provider access.
+Create your account in the application. Connect GitHub in **Account**. Set `AI_PROVIDER=bedrock`, `AWS_BEARER_TOKEN_BEDROCK`, `AWS_REGION` and an exact verified `BEDROCK_MODEL_ID` in the private root `.env`, then restart the app and worker. Direct OpenAI remains optional with `AI_PROVIDER=openai` and a separate `OPENAI_API_KEY`. GitHub workflows work without an AI key. Key presence alone does not verify provider access.
 
 Owner administration is available at **`/admin`**. Promote only your existing account once with `npm run admin:bootstrap -- --email 'your-existing-email@example.com'` on the trusted server after applying migrations. Signup never grants administrator access. See [owner setup and administration](docs/ADMIN.md) for user controls, plans, job operations, authorization and auditing.
 
@@ -43,7 +43,7 @@ In Codespaces, set `APP_URL=https://<codespace-name>-3000.app.github.dev`. The s
 
 `npm run ai:verify` makes live requests to the selected provider, consumes provider tokens, and writes a sanitized report to `docs/ai-live-verification.json`. It uses temporary database fixtures for two bounded connection/chat requests; it performs no coding-agent or GitHub actions. Run it only when live provider verification is intended.
 
-Browser setup: `npx playwright install --with-deps chromium`. Integration/browser tests create uniquely named fixture accounts and remove their own records. Use a local disposable database. They never call live AI providers or GitHub write APIs. Do not point the test environment at production.
+Browser setup: `npx playwright install --with-deps chromium`. Integration/browser tests create uniquely named fixture accounts and remove their own records. Use a local disposable database. Stop standalone worker processes before integration/browser tests: they can otherwise claim test fixture jobs and bypass the test process’s mocked AI/GitHub boundaries. Restart the worker after fixtures are cleaned up. They never call live AI providers or GitHub write APIs. Do not point the test environment at production.
 
 ## Credentials and configuration
 
@@ -117,8 +117,12 @@ Current live result (2026-10-29): OpenAI rejected the supplied key (`AI_AUTHENTI
 
 Implementation references: [GPT-6 Astra](https://developers.openai.com/api/docs/models/gpt-6-astra), [streaming Responses](https://developers.openai.com/api/docs/guides/streaming-responses), [function calling](https://developers.openai.com/api/docs/guides/function-calling), [structured outputs](https://developers.openai.com/api/docs/guides/structured-outputs). Coding actions and contribution matching use strict JSON schemas; tool arguments are still validated server-side before any action.
 
-## AgentRouter gateway
+## Amazon Bedrock
 
-See [AgentRouter configuration and verification](docs/AGENTROUTER.md). This workspace selects `AI_PROVIDER=agentrouter` with `https://co.agentrouter.org/v1`. `AGENTROUTER_MODEL` has no automatic default or fallback. The requested `gpt-6-astra` must appear in the authenticated gateway catalog before EasySolve will generate with it. The current token received HTTP 401, so no available-model list, Astra access, chat, streaming, tools or schema support has been live-verified. Account credit is not proof of API access.
+See [Bedrock setup and verification](docs/BEDROCK.md). The active provider is Bedrock; credentials remain server-side and no fallback provider is used.
+
+## Optional AgentRouter gateway
+
+See [AgentRouter configuration and verification](docs/AGENTROUTER.md). The optional gateway uses `AI_PROVIDER=agentrouter` with `https://co.agentrouter.org/v1`. `AGENTROUTER_MODEL` has no automatic default or fallback. The requested `gpt-6-astra` must appear in the authenticated gateway catalog before EasySolve will generate with it. The current token received HTTP 401, so no available-model list, Astra access, chat, streaming, tools or schema support has been live-verified. Account credit is not proof of API access.
 
 `npm run agentrouter:verify` queries the authenticated catalog, then tests bounded chat, a harmless owned-issue tool, and a strict JSON schema only if the requested model is listed. It writes sanitized status and actual usage to `docs/agentrouter-live-verification.json`. `npm run ai:verify` tests ordinary chat on the selected provider and writes `docs/ai-live-verification.json`. Both consume tokens when access succeeds; neither performs GitHub writes. Tests use provider mocks. Direct OpenAI prices never estimate AgentRouter charges.

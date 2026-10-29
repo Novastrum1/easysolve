@@ -1,7 +1,8 @@
+import { creditMergedRun } from "../entitlements";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "../db";
-import { github,reviewQueue } from "../github";
+import { github, reviewQueue } from "../github";
 import { repoName } from "../policy";
 import { HttpError } from "../security";
 import type { RouteContext } from "./types";
@@ -90,10 +91,7 @@ export async function handleReviews({
         where: { userId: u.id, repo, prNumber: input.number },
       });
       for (const run of linked) {
-        await db.run.update({
-          where: { id: run.id },
-          data: { status: "completed" },
-        });
+        await creditMergedRun(u.id, run.id);
         await db.issue.updateMany({
           where: { userId: u.id, id: { in: run.issueIds as string[] } },
           data: { status: "done" },

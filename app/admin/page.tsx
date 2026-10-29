@@ -8,7 +8,7 @@ export default async function AdminPage() {
     const account = await requireAdmin();
     return <AdminDashboard ownerName={account.name} />;
   } catch (error) {
-    if (error instanceof HttpError && error.status === 401) redirect("/");
+    if (error instanceof HttpError && error.status === 401) redirect("/admin/login");
     if (error instanceof HttpError && error.status === 403) notFound();
     throw error;
   }

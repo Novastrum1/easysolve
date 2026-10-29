@@ -1,4 +1,4 @@
-import "dotenv/config";
+import "../lib/load-env";
 import { providerConfig } from "../lib/providers";
 import { execFileSync } from "node:child_process";
 import { db } from "../lib/db";
@@ -7,7 +7,7 @@ console.log(`EasySolve diagnostics · Node ${process.version}`);
 console.log(`Browser origin: ${process.env.APP_URL || "not configured"}`);
 const provider = providerConfig();
 console.log(
-  `${provider.name}: ${provider.configured ? "key configured (not live-verified)" : "setup required"} · model ${provider.model || "selection required"}`,
+  `${provider.name}: ${provider.configured ? "key configured (not live-verified)" : "setup required"} · model ${provider.model || "selection required"}${"region" in provider ? ` · Region ${provider.region || "required"}` : ""}`,
 );
 
 const encryption =

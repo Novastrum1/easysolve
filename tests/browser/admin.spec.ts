@@ -125,6 +125,9 @@ test("owner dashboard supports account controls, job inspection, health, and aud
   await page.getByLabel("Plan name", { exact: true }).fill("Owner managed");
   await page.getByLabel("Monthly plan job limit").fill("12");
   await page.getByLabel("Monthly plan token limit").fill("50000");
+  await page
+    .getByLabel("Budget change reason")
+    .fill("Browser budget adjustment");
   await page.getByRole("button", { name: "Save plan limits" }).click();
   await expect(
     page.getByText("Plan limits updated.", { exact: true }),

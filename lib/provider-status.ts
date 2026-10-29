@@ -25,11 +25,20 @@ export async function providerStatus() {
     : null;
   const verified =
     !!receipt &&
+    receipt.verifiedAt.getTime() > 0 &&
     receipt.fingerprint === providerFingerprint() &&
     receipt.verifiedAt.getTime() > Date.now() - 86400000;
   return {
     id,
     name,
+    region:
+      "region" in providerConfig()
+        ? (providerConfig() as { region: string }).region
+        : null,
+    connectionFailed:
+      !!receipt &&
+      receipt.verifiedAt.getTime() === 0 &&
+      receipt.fingerprint === providerFingerprint(),
     configured,
     model,
     modelName: model === "gpt-6-astra" ? "GPT-6 Astra" : model,

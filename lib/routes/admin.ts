@@ -1,3 +1,4 @@
+import { entitlementSummary, releaseRun } from "../entitlements";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import {
@@ -104,7 +105,38 @@ export async function handleAdmin({ request, path, body, url }: RouteContext) {
             "Provider configuration or health is unavailable. Check server configuration.",
         };
       }
+      const activePro = await db.user.count({
+        where: {
+          membershipPlan: "pro",
+          OR: [{ proLifetime: true }, { proExpiresAt: { gt: new Date() } }],
+        },
+      });
+      const successfulSolves = await db.solveClaim.count({
+        where: { status: "successful" },
+      });
+      const paymentGroups = await db.paymentReceipt.groupBy({
+        by: ["network", "status"],
+        _count: true,
+      });
+      const invoiceGroups = await db.invoice.groupBy({
+        by: ["status"],
+        _count: true,
+      });
+      const revenueReceipts = await db.paymentReceipt.findMany({
+        where: { network: "mainnet", status: "verified" },
+        select: { amount: true },
+      });
+      const verifiedRevenueUnits = revenueReceipts.reduce(
+        (n, r) => n + BigInt(r.amount.replace(".", "")),
+        0n,
+      );
       return json({
+        basicUsers: users - activePro,
+        activePro,
+        successfulSolves,
+        paymentGroups,
+        invoiceGroups,
+        verifiedRevenue: `${verifiedRevenueUnits / 10000000n}.${String(verifiedRevenueUnits % 10000000n).padStart(7, "0")}`,
         users,
         workspaces: users,
         suspended,
@@ -177,6 +209,26 @@ export async function handleAdmin({ request, path, body, url }: RouteContext) {
         }),
       ]);
       return json({
+        entitlements: await entitlementSummary(account.id),
+        membership: await db.user.findUnique({
+          where: { id: account.id },
+          select: {
+            membershipPlan: true,
+            proLifetime: true,
+            proExpiresAt: true,
+          },
+        }),
+        payments: await db.invoice.findMany({
+          where: { userId: account.id },
+          take: 30,
+          orderBy: { createdAt: "desc" },
+          include: { payments: true },
+        }),
+        grants: await db.entitlementGrant.findMany({
+          where: { userId: account.id },
+          take: 30,
+          orderBy: { createdAt: "desc" },
+        }),
         ...account,
         settings: settings(account.settings),
         limits: planLimits(account),
@@ -291,6 +343,7 @@ export async function handleAdmin({ request, path, body, url }: RouteContext) {
             select: { id: true, issueIds: true },
           });
           for (const run of runs) {
+            await releaseRun(run.id, tx);
             await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`run:${run.id}`}))`;
             // Publishing holds this lock; never rewrite a run that published while waiting.
             const cancelled = await tx.run.updateMany({
@@ -325,6 +378,9 @@ export async function handleAdmin({ request, path, body, url }: RouteContext) {
             actorId: actor.id,
             targetId,
             action: input.suspended ? "account.suspend" : "account.reactivate",
+            reason: input.reason,
+            oldValues: { suspended: !!target.suspendedAt },
+            newValues: { suspended: input.suspended },
             details: {
               reason: redactDiagnostic(input.reason),
               previouslySuspended: !!target.suspendedAt,
@@ -337,6 +393,7 @@ export async function handleAdmin({ request, path, body, url }: RouteContext) {
     if (path[3] === "plan") {
       const input = z
         .object({
+          reason: z.string().trim().min(3).max(1000),
           planName: z.string().trim().min(1).max(80).nullable(),
           planMaxJobs: z.number().int().min(0).max(100000).nullable(),
           planMaxTokens: z.number().int().min(0).max(2000000000).nullable(),
@@ -351,12 +408,20 @@ export async function handleAdmin({ request, path, body, url }: RouteContext) {
           select: { planName: true, planMaxJobs: true, planMaxTokens: true },
         });
         if (!before) throw new HttpError(404, "Account not found");
-        await tx.user.update({ where: { id: targetId }, data: input });
+        const { reason: _, ...changes } = input;
+        await tx.user.update({ where: { id: targetId }, data: changes });
         await tx.adminAudit.create({
           data: {
             actorId: actor.id,
             targetId,
             action: "account.plan",
+            reason: input.reason,
+            oldValues: before,
+            newValues: {
+              planName: input.planName,
+              planMaxJobs: input.planMaxJobs,
+              planMaxTokens: input.planMaxTokens,
+            },
             details: { before, after: input },
           },
         });
@@ -382,6 +447,9 @@ export async function handleAdmin({ request, path, body, url }: RouteContext) {
           actorId: actor.id,
           targetId,
           action: `job.${path[3]}`,
+          reason: `Administrator requested job ${path[3]}`,
+          oldValues: { status: details.before },
+          newValues: { status: details.after },
           details,
         },
       });

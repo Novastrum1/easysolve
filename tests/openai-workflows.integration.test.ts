@@ -65,6 +65,7 @@ beforeAll(async () => {
   userId = (
     await db.user.create({
       data: {
+        issueLimitOverride: 100,
         email: `openai-workflows-${crypto.randomUUID()}@example.test`,
         name: "Provider fixture",
         password: "no-login",

@@ -287,6 +287,7 @@ it("persists audited plan limits and enforces them against AI and job admission"
   expect(
     (
       await call(`admin/users/${ordinaryId}/plan`, {
+        reason: "Pause fixture budgets",
         planName: "Paused",
         planMaxJobs: 0,
         planMaxTokens: 0,

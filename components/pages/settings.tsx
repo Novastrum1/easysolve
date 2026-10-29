@@ -1,4 +1,6 @@
 "use client";
+import { BillingExperience } from "../billing-experience";
+import { AccountEntitlements } from "../account-entitlements";
 import {
   ArrowRight,
   CreditCard,
@@ -512,6 +514,7 @@ export function AccountPage(c: Context) {
             </Button>
           </form>
         </Panel>
+        <AccountEntitlements {...c} />
         <Panel
           title={`${c.data.health.provider.name} connection`}
           description="API keys are configured on the server, never sent to the browser."
@@ -524,14 +527,18 @@ export function AccountPage(c: Context) {
               <strong>
                 {c.data.health.provider.name} ·{" "}
                 {c.data.health.provider.modelName || "Model selection required"}
+                {c.data.health.provider.region &&
+                  ` · ${c.data.health.provider.region}`}
               </strong>
               <Badge
                 status={
                   c.data.health.provider.verified
                     ? "connection_verified"
-                    : c.data.health.ai
-                      ? "configured"
-                      : "setup_required"
+                    : c.data.health.provider.connectionFailed
+                      ? "connection_failed"
+                      : c.data.health.ai
+                        ? "configured"
+                        : "setup_required"
                 }
               />
             </div>
@@ -539,7 +546,9 @@ export function AccountPage(c: Context) {
           <p className="muted">
             {c.data.health.provider.verified
               ? `Connection verified ${new Date(c.data.health.provider.verifiedAt).toLocaleString()}`
-              : "Connection not verified. Configuration alone does not confirm model access."}
+              : c.data.health.provider.connectionFailed
+                ? "Connection failed. Check server configuration and model access, then retry."
+                : "Connection not verified. Configuration alone does not confirm model access."}
           </p>
           {c.data.user.providerAdmin && (
             <Button
@@ -633,9 +642,9 @@ export function AccountPage(c: Context) {
             e.preventDefault();
             setBusy(true);
             try {
-              await c.act("identities", { token });
+              const result = await c.act("identities", { token });
               setToken("");
-              c.notify("GitHub identity connected and validated.");
+              c.notify(result.message || "GitHub identity updated.");
             } catch {
             } finally {
               setBusy(false);
@@ -735,8 +744,9 @@ export function AccountPage(c: Context) {
           onClose={() => setDisconnect(null)}
         >
           <p>
-            The encrypted token will be deleted from EasySolve. Revoke the token
-            on GitHub as well if you no longer need it.
+            This account will be disabled for use. Its encrypted credential and
+            account slot are retained, along with repositories and history.
+            Revoke the token on GitHub as well if you no longer need it.
           </p>
           <div className="modal-actions">
             <Button variant="secondary" onClick={() => setDisconnect(null)}>
@@ -759,85 +769,5 @@ export function AccountPage(c: Context) {
   );
 }
 export function BillingPage(c: Context) {
-  const tokens = c.data.usage.reduce((n: number, u: any) => n + u.total, 0);
-  const jobs = c.data.runs.filter(
-    (r: any) =>
-      new Date(r.createdAt) >=
-      new Date(new Date().getUTCFullYear(), new Date().getUTCMonth(), 1),
-  ).length;
-  return (
-    <>
-      <PageHead
-        eyebrow="ROOM FOR YOUR NEXT GOOD IDEA"
-        title="A plan that’s clear about its limits."
-        description="Your workspace’s current entitlements and actual monthly usage."
-      />
-      <div className="two-column">
-        <Panel
-          title={`${c.data.plan} plan`}
-          description="Self-hosted workspace"
-        >
-          <div className="plan-detail">
-            <div className="row-icon emerald">
-              <CreditCard size={24} />
-            </div>
-            <h2>Your infrastructure. Your control.</h2>
-            <p>
-              No payment provider is configured. This installation does not
-              collect payments or create subscriptions.
-            </p>
-            <Badge status="active" />
-          </div>
-        </Panel>
-        <Panel
-          title="This month"
-          description={`Resets ${new Date(c.data.limits.reset).toLocaleDateString()} UTC`}
-        >
-          <div className="allowance">
-            <div>
-              <span>Jobs started</span>
-              <strong>
-                {jobs} /{" "}
-                {Math.min(c.data.settings.monthlyJobs, c.data.limits.jobs)}
-              </strong>
-            </div>
-            <progress
-              value={jobs}
-              max={Math.min(c.data.settings.monthlyJobs, c.data.limits.jobs)}
-            />
-            <div>
-              <span>Actual AI tokens</span>
-              <strong>
-                {tokens.toLocaleString()} /{" "}
-                {Math.min(
-                  c.data.settings.monthlyTokens,
-                  c.data.limits.tokens,
-                ).toLocaleString()}
-              </strong>
-            </div>
-            <progress
-              value={tokens}
-              max={Math.min(
-                c.data.settings.monthlyTokens,
-                c.data.limits.tokens,
-              )}
-            />
-            <p>
-              Job limits are enforced before creation. Token allowance
-              exhaustion queues background work until reset.
-            </p>
-            <a className="external" href="/usage">
-              Inspect AI usage
-              <ArrowRight size={14} />
-            </a>
-          </div>
-        </Panel>
-      </div>
-      <div className="subtle-notice">
-        <ShieldCheck size={17} />
-        Operators configure plan ceilings with PLAN_MAX_JOBS and
-        PLAN_MAX_TOKENS. User settings can lower these limits.
-      </div>
-    </>
-  );
+  return <BillingExperience />;
 }

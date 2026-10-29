@@ -1,5 +1,6 @@
+import { reserveIssues } from "./entitlements";
 import { db } from "./db";
-import { groups,monthStart,settings,planLimits } from "./policy";
+import { groups, monthStart, settings, planLimits } from "./policy";
 import { HttpError } from "./security";
 export async function enqueue(
   userId: string,
@@ -12,7 +13,9 @@ export async function enqueue(
     const account = await tx.user.findUniqueOrThrow({ where: { id: userId } });
     if (account.suspendedAt) throw new HttpError(403, "Account suspended");
     return tx.job.upsert({
-      where: { key }, create: { userId, kind, key, payload }, update: {},
+      where: { key },
+      create: { userId, kind, key, payload },
+      update: {},
     });
   });
 }
@@ -82,6 +85,13 @@ export async function startRuns(userId: string, ids: string[]) {
           mode: config.mode,
         },
       });
+      if (run.mode !== "plan")
+        await reserveIssues(
+          tx,
+          userId,
+          run.id,
+          batch.map((i) => i.id),
+        );
       await tx.issue.updateMany({
         where: { id: { in: batch.map((i) => i.id) }, userId },
         data: { status: "in_progress" },

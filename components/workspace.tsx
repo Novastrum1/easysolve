@@ -274,7 +274,15 @@ export function Workspace() {
           <ChevronRight size={14} />
         </button>
         <nav aria-label="Main navigation">
-          {data.user.role === "ADMIN" && <div className="nav-group"><p>Administration</p><Link href="/admin"><ShieldCheck size={18} /><span>Owner dashboard</span></Link></div>}
+          {data.user.role === "ADMIN" && (
+            <div className="nav-group">
+              <p>Administration</p>
+              <Link href="/admin">
+                <ShieldCheck size={18} />
+                <span>Owner dashboard</span>
+              </Link>
+            </div>
+          )}
           {nav.map((g) => (
             <div className="nav-group" key={g.group}>
               <p>{g.group}</p>
@@ -307,15 +315,25 @@ export function Workspace() {
         </nav>
         <div className="sidebar-bottom">
           <div className="agent-status">
-            <span className={data.health.ai ? "online-dot" : "offline-dot"} />
+            <span
+              className={
+                data.health.provider.verified ? "online-dot" : "offline-dot"
+              }
+            />
             <span>
-              {data.health.ai
-                ? `${data.health.provider.name} configured`
-                : `${data.health.provider.name} setup required`}
+              {data.health.provider.connectionFailed
+                ? `${data.health.provider.name} connection failed`
+                : data.health.provider.verified
+                  ? `${data.health.provider.name} verified`
+                  : data.health.ai
+                    ? `${data.health.provider.name} configured`
+                    : `${data.health.provider.name} setup required`}
               <small>
-                {data.health.ai
-                  ? "Ready when you are"
-                  : "Set up to start solving"}
+                {data.health.provider.connectionFailed
+                  ? "Check connection settings"
+                  : data.health.ai
+                    ? "Check verification in Account"
+                    : "Set up to start solving"}
               </small>
             </span>
             <a
@@ -450,7 +468,7 @@ export function Workspace() {
             <SettingsPage {...context} />
           ) : page === "account" ? (
             <AccountPage {...context} />
-          ) : page === "billing" ? (
+          ) : page === "billing" || page === "checkout" ? (
             <BillingPage {...context} />
           ) : (
             <Empty
@@ -958,7 +976,9 @@ function Auth({
   });
   const action: AuthMode = resetToken ? "reset" : mode;
   const switchMode = (next: Exclude<AuthMode, "reset">) => {
-    setMode(next); setMessage(""); setFieldErrors({});
+    setMode(next);
+    setMessage("");
+    setFieldErrors({});
   };
   const submit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -968,16 +988,23 @@ function Auth({
     // Capture the enabled DOM controls before any loading-state render.
     const f = new FormData(e.currentTarget);
     try {
-      const result = await request(`auth/${action}`, authPayload(action, f, resetToken));
+      const result = await request(
+        `auth/${action}`,
+        authPayload(action, f, resetToken),
+      );
       if (action === "recover" || action === "reset") {
         setMessage(
           result.message ?? "Password changed. Sign in with your new password.",
         );
-        if (action === "reset") { history.replaceState({}, "", "/"); setResetToken(null); }
+        if (action === "reset") {
+          history.replaceState({}, "", "/");
+          setResetToken(null);
+        }
         setMode("login");
       } else await onLogin();
     } catch (e) {
-      if (e instanceof RequestError && e.fieldErrors) setFieldErrors(e.fieldErrors);
+      if (e instanceof RequestError && e.fieldErrors)
+        setFieldErrors(e.fieldErrors);
       else setMessage((e as Error).message);
     } finally {
       setBusy(false);
@@ -1025,16 +1052,20 @@ function Auth({
         <form onSubmit={submit}>
           <div className="eyebrow">YOUR NEXT CONTRIBUTION AWAITS</div>
           <h2>
-            {action === "reset" ? "Choose a new password." : mode === "signup"
-              ? "Make room for good work."
-              : mode === "recover"
-                ? "Find your way back."
-                : "Welcome to EasySolve."}
+            {action === "reset"
+              ? "Choose a new password."
+              : mode === "signup"
+                ? "Make room for good work."
+                : mode === "recover"
+                  ? "Find your way back."
+                  : "Welcome to EasySolve."}
           </h2>
           <p>
-            {action === "reset" ? "Use at least 8 characters for your new password." : mode === "signup"
-              ? "Create your private workspace to get started."
-              : "Sign in to pick up where you left off."}
+            {action === "reset"
+              ? "Use at least 8 characters for your new password."
+              : mode === "signup"
+                ? "Create your private workspace to get started."
+                : "Sign in to pick up where you left off."}
           </p>
           {error && !error.includes("Sign in") && (
             <div className="alert">{error}</div>
@@ -1063,7 +1094,11 @@ function Auth({
             </Field>
           )}
           {action !== "recover" && (
-            <Field label="Password" hint="Use at least 8 characters." error={fieldErrors.password}>
+            <Field
+              label="Password"
+              hint="Use at least 8 characters."
+              error={fieldErrors.password}
+            >
               <input
                 name="password"
                 type="password"
@@ -1077,31 +1112,43 @@ function Auth({
               />
             </Field>
           )}
-          {fieldErrors.token && <div role="alert" className="alert">{fieldErrors.token}</div>}
-          {fieldErrors.form && <div role="alert" className="alert">{fieldErrors.form}</div>}
+          {fieldErrors.token && (
+            <div role="alert" className="alert">
+              {fieldErrors.token}
+            </div>
+          )}
+          {fieldErrors.form && (
+            <div role="alert" className="alert">
+              {fieldErrors.form}
+            </div>
+          )}
           {message && (
             <div role="alert" className="alert">
               {message}
             </div>
           )}
           <Button type="submit" busy={busy}>
-            {action === "reset" ? "Save new password" : mode === "signup"
-              ? "Create workspace"
-              : mode === "recover"
-                ? "Send recovery link"
-                : "Continue"}
+            {action === "reset"
+              ? "Save new password"
+              : mode === "signup"
+                ? "Create workspace"
+                : mode === "recover"
+                  ? "Send recovery link"
+                  : "Continue"}
             <ArrowRight size={16} />
           </Button>
-          {action !== "reset" && <button
-            type="button"
-            className="text-button"
-            disabled={busy}
-            onClick={() => switchMode(mode === "signup" ? "login" : "signup")}
-          >
-            {mode === "signup"
-              ? "Already have an account? Sign in"
-              : "New here? Create an account"}
-          </button>}
+          {action !== "reset" && (
+            <button
+              type="button"
+              className="text-button"
+              disabled={busy}
+              onClick={() => switchMode(mode === "signup" ? "login" : "signup")}
+            >
+              {mode === "signup"
+                ? "Already have an account? Sign in"
+                : "New here? Create an account"}
+            </button>
+          )}
           {action === "login" && (
             <button
               type="button"

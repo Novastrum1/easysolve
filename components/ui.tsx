@@ -1,19 +1,19 @@
 "use client";
 import {
-ArrowUpRight,
-ChevronDown,
-Inbox,
-LoaderCircle,
-Search,
-X,
+  ArrowUpRight,
+  ChevronDown,
+  Inbox,
+  LoaderCircle,
+  Search,
+  X,
 } from "lucide-react";
-import { cloneElement,isValidElement,useEffect,useId,useRef } from "react";
+import { cloneElement, isValidElement, useEffect, useId, useRef } from "react";
 export const label = (s: string) =>
   s.replaceAll("_", " ").replace(/^./, (c) => c.toUpperCase());
 export function Badge({ status }: { status: string }) {
   return (
     <span
-      className={`badge ${["connection_verified", "completed", "done", "connected", "approved", "ready", "applied", "success", "published"].includes(status) ? "green" : ["failed", "blocked", "needs_attention", "failure", "changes_requested"].includes(status) ? "red" : ["running", "in_progress", "queued", "awaiting_review", "pending"].includes(status) ? "amber" : ""}`}
+      className={`badge ${["verified", "connection_verified", "completed", "done", "connected", "approved", "ready", "applied", "success", "published"].includes(status) ? "green" : ["underpaid", "overpaid", "unmatched", "failed_verification", "expired", "connection_failed", "failed", "blocked", "needs_attention", "failure", "changes_requested"].includes(status) ? "red" : ["running", "in_progress", "queued", "awaiting_review", "pending"].includes(status) ? "amber" : ""}`}
     >
       <span />
       {label(status)}
@@ -81,12 +81,19 @@ export function Field({
             {
               "aria-labelledby": fieldId,
               "aria-invalid": error ? true : undefined,
-              "aria-describedby": [hint && fieldId + "-hint", error && fieldId + "-error"].filter(Boolean).join(" ") || undefined,
+              "aria-describedby":
+                [hint && fieldId + "-hint", error && fieldId + "-error"]
+                  .filter(Boolean)
+                  .join(" ") || undefined,
             },
           )
         : children}
       {hint && <small id={fieldId + "-hint"}>{hint}</small>}
-      {error && <small id={fieldId + "-error"} role="alert">{error}</small>}
+      {error && (
+        <small id={fieldId + "-error"} role="alert">
+          {error}
+        </small>
+      )}
     </label>
   );
 }
@@ -197,7 +204,12 @@ export function Select({
   );
 }
 export class RequestError extends Error {
-  constructor(message: string, public fieldErrors?: Record<string, string>) { super(message); }
+  constructor(
+    message: string,
+    public fieldErrors?: Record<string, string>,
+  ) {
+    super(message);
+  }
 }
 export async function request(path: string, body?: unknown, method?: string) {
   const r = await fetch(`/api/${path}`, {
@@ -206,7 +218,8 @@ export async function request(path: string, body?: unknown, method?: string) {
     body: body ? JSON.stringify(body) : undefined,
   });
   const data = await r.json();
-  if (!r.ok) throw new RequestError(data.error || "Request failed", data.fieldErrors);
+  if (!r.ok)
+    throw new RequestError(data.error || "Request failed", data.fieldErrors);
   return data;
 }
 export function Diff({ value }: { value: string }) {

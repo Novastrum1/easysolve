@@ -1,5 +1,10 @@
+import {
+  assertIdentityAccess,
+  creditMergedRun,
+  releaseRun,
+} from "./entitlements";
 import { db } from "./db";
-import { decrypt,HttpError } from "./security";
+import { decrypt, HttpError } from "./security";
 export class GitHub {
   constructor(private token: string) {}
   async request<T = any>(
@@ -43,10 +48,7 @@ export class GitHub {
   }
 }
 export async function github(userId: string, identityId: string) {
-  const i = await db.identity.findFirst({
-    where: { id: identityId, userId, active: true },
-  });
-  if (!i) throw new HttpError(422, "Select an active GitHub identity");
+  const i = await assertIdentityAccess(userId, identityId);
   return new GitHub(decrypt(i.token));
 }
 export async function syncIssues(userId: string, identityId: string) {
@@ -121,6 +123,7 @@ export async function syncIssues(userId: string, identityId: string) {
     for (const run of published) {
       const pr = await gh.request(`/repos/${run.repo}/pulls/${run.prNumber}`);
       if (pr.merged) {
+        await creditMergedRun(userId, run.id);
         await db.run.update({
           where: { id: run.id },
           data: { status: "completed" },
@@ -128,6 +131,15 @@ export async function syncIssues(userId: string, identityId: string) {
         await db.issue.updateMany({
           where: { userId, id: { in: run.issueIds as string[] } },
           data: { status: "done" },
+        });
+      } else if (pr.state === "closed") {
+        await releaseRun(run.id);
+        await db.run.update({
+          where: { id: run.id },
+          data: {
+            status: "cancelled",
+            error: "Pull request closed without merge",
+          },
         });
       }
     }

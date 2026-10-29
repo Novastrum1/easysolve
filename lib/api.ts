@@ -1,3 +1,4 @@
+import { handleBilling } from "./routes/billing";
 import { providerConfig } from "./providers";
 import { NextResponse } from "next/server";
 import { z } from "zod";
@@ -24,6 +25,7 @@ export async function api(request: Request, path: string[]) {
       method === "GET" &&
       !["health", "bootstrap", "discover", "reviews"].includes(route) &&
       path[0] !== "admin" &&
+      path[0] !== "billing" &&
       !(path[0] === "runs" && path.length === 2)
     )
       throw new HttpError(405, "Use POST for this operation");
@@ -58,6 +60,7 @@ export async function api(request: Request, path: string[]) {
     await rateLimit(`user:${u.id}`, 120);
     const context = { request, path, body, url, u };
     for (const handler of [
+      handleBilling,
       handleAdmin,
       handleAccount,
       handleBootstrap,

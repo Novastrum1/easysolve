@@ -20,6 +20,17 @@ model User {
  planName String?
  planMaxJobs Int?
  planMaxTokens Int?
+ membershipPlan String @default("basic")
+ proExpiresAt DateTime?
+ proLifetime Boolean @default(false)
+ issueLimitOverride Int?
+ issueOverrideExpiresAt DateTime?
+ githubLimitOverride Int?
+ githubOverrideExpiresAt DateTime?
+ allowanceResetAt DateTime @default(dbgenerated("'1970-01-01'::timestamp"))
+ solveClaims SolveClaim[]
+ invoices Invoice[]
+ grants EntitlementGrant[]
  sessions Session[]
  identities Identity[]
  repos Repository[]
@@ -50,12 +61,15 @@ model Identity {
  userId String
  user User @relation(fields:[userId], references:[id], onDelete:Cascade)
  login String
+ githubAccountId String?
+ usable Boolean @default(true)
  token String
  active Boolean @default(true)
  status String @default("connected")
  syncedAt DateTime?
  createdAt DateTime @default(now())
  @@unique([userId,login])
+ @@unique([userId,githubAccountId])
 }
 model Repository {
  id String @id @default(cuid())
@@ -212,6 +226,9 @@ model AdminAudit {
  action String
  targetId String
  details Json @default("{}")
+ reason String @default("")
+ oldValues Json @default("{}")
+ newValues Json @default("{}")
  createdAt DateTime @default(now())
  @@index([createdAt])
 }
@@ -220,4 +237,108 @@ model AdminBootstrap {
  id String @id
  userId String
  createdAt DateTime @default(now())
+}
+
+model PlanVersion {
+ id String @id @default(cuid())
+ version Int @unique
+ settings Json
+ actorId String
+ createdAt DateTime @default(now())
+ invoices Invoice[]
+}
+model SolveClaim {
+ id String @id @default(cuid())
+ userId String
+ user User @relation(fields:[userId],references:[id],onDelete:Cascade)
+ issueId String
+ runId String
+ status String @default("reserved")
+ succeededAt DateTime?
+ createdAt DateTime @default(now())
+ updatedAt DateTime @updatedAt
+ @@unique([userId,issueId])
+ @@index([userId,status])
+ @@index([runId])
+}
+model Invoice {
+ id String @id @default(cuid())
+ userId String
+ user User @relation(fields:[userId],references:[id],onDelete:Cascade)
+ planVersionId String
+ planVersion PlanVersion @relation(fields:[planVersionId],references:[id])
+ network String
+ recipient String
+ assetCode String
+ issuer String
+ amount String
+ memo String @unique
+ terms Json
+ status String @default("pending")
+ entitlementState String @default("pending")
+ expiresAt DateTime
+ createdAt DateTime @default(now())
+ verifiedAt DateTime?
+ payments PaymentReceipt[]
+ submissions PaymentSubmission[]
+ grants EntitlementGrant[]
+ refundRequestedAt DateTime?
+ refundStatus String @default("none")
+ @@index([userId,createdAt])
+ @@index([status])
+}
+model PaymentReceipt {
+ id String @id @default(cuid())
+ network String
+ operationId String
+ transactionHash String
+ invoiceId String?
+ invoice Invoice? @relation(fields:[invoiceId],references:[id])
+ recipient String
+ assetCode String
+ issuer String
+ amount String
+ memo String?
+ ledger Int
+ paidAt DateTime
+ status String
+ detail String
+ createdAt DateTime @default(now())
+ @@unique([network,operationId])
+ @@index([status])
+}
+model PaymentSubmission {
+ id String @id @default(cuid())
+ invoiceId String
+ invoice Invoice @relation(fields:[invoiceId],references:[id],onDelete:Cascade)
+ transactionHash String
+ status String @default("queued")
+ attempts Int @default(0)
+ availableAt DateTime @default(now())
+ error String?
+ createdAt DateTime @default(now())
+ @@unique([invoiceId,transactionHash])
+}
+model EntitlementGrant {
+ id String @id @default(cuid())
+ userId String
+ user User @relation(fields:[userId],references:[id],onDelete:Cascade)
+ source String
+ actorId String?
+ reason String
+ invoiceId String? @unique
+ invoice Invoice? @relation(fields:[invoiceId],references:[id])
+ startsAt DateTime @default(now())
+ expiresAt DateTime?
+ createdAt DateTime @default(now())
+}
+model PaymentCursor {
+ id String @id
+ network String
+ recipient String
+ cursor String @default("0")
+ attempts Int @default(0)
+ availableAt DateTime @default(now())
+ error String?
+ updatedAt DateTime @updatedAt
 }

@@ -1,3 +1,5 @@
+import { connectGithubAccount, chooseGithubAccounts } from "../github-accounts";
+import { entitlementSummary } from "../entitlements";
 import { ai } from "../ai";
 import { isProviderAdmin, providerStatus } from "../provider-status";
 import { rateLimit } from "../security";
@@ -77,13 +79,22 @@ export async function handleAccount({
     const token = z.string().min(20).max(300).parse(body.token);
     const gh = new GitHub(token);
     const account = await gh.request("/user");
-    const identity = await db.identity.upsert({
-      where: { userId_login: { userId: u.id, login: account.login } },
-      create: { userId: u.id, login: account.login, token: encrypt(token) },
-      update: { token: encrypt(token), status: "connected", active: true },
+    const identity = await connectGithubAccount(u.id, account, token);
+    return json({
+      id: identity.id,
+      login: identity.login,
+      active: identity.active,
+      usable: identity.usable,
+      message:
+        identity.active && identity.usable
+          ? "GitHub identity connected and validated."
+          : "Token updated. Select this identity in Usable GitHub identities to enable it.",
     });
-    return json({ id: identity.id, login: identity.login });
   }
+  if (route === "identities/selection")
+    return json(
+      await chooseGithubAccounts(u.id, z.array(id).max(100).parse(body.ids)),
+    );
   if (path[0] === "identities" && path[1]) {
     const identity = await db.identity.findFirst({
       where: { id: path[1], userId: u.id },
@@ -100,7 +111,10 @@ export async function handleAccount({
         })
       )
         throw new HttpError(409, "Cancel active runs before disconnecting");
-      await db.identity.delete({ where: { id: identity.id } });
+      await db.identity.update({
+        where: { id: identity.id },
+        data: { active: false, usable: false, status: "disconnected" },
+      });
       return json({ ok: true });
     }
     if (path[2] === "validate") {
@@ -109,11 +123,23 @@ export async function handleAccount({
         where: { id: identity.id },
         data: { status: "connected" },
       });
-    } else
-      await db.identity.update({
-        where: { id: identity.id },
-        data: { active: z.boolean().parse(body.active) },
-      });
+    } else {
+      const active = z.boolean().parse(body.active);
+      if (active) {
+        const current = await db.identity.findMany({
+          where: { userId: u.id, active: true, usable: true },
+          select: { id: true },
+        });
+        await chooseGithubAccounts(u.id, [
+          ...current.map((i) => i.id),
+          identity.id,
+        ]);
+      } else
+        await db.identity.update({
+          where: { id: identity.id },
+          data: { active: false, usable: false },
+        });
+    }
     return json({ ok: true });
   }
   return undefined;

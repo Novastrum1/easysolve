@@ -59,13 +59,15 @@ test("signup, every workspace screen, persistence, responsive navigation and log
     if (name === "Account") {
       await expect(
         page.getByText(
-          `${process.env.AI_PROVIDER === "agentrouter" ? "AgentRouter" : "OpenAI"} · GPT-6 Astra`,
+          process.env.AI_PROVIDER === "bedrock"
+            ? `Amazon Bedrock · ${process.env.BEDROCK_MODEL_ID} · ${process.env.AWS_REGION}`
+            : `${process.env.AI_PROVIDER === "agentrouter" ? "AgentRouter" : "OpenAI"} · GPT-6 Astra`,
           { exact: true },
         ),
       ).toBeVisible();
       await expect(
         page.getByRole("button", {
-          name: /Test (OpenAI|AgentRouter) connection/,
+          name: /Test (Amazon Bedrock|OpenAI|AgentRouter) connection/,
         }),
       ).toHaveCount(0);
       await expect(page.getByText("DeepSeek", { exact: true })).toHaveCount(0);

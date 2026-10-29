@@ -1,3 +1,4 @@
+import { reserveRun, releaseRun } from "../lib/entitlements";
 import { z } from "zod";
 import { zodTextFormat } from "openai/helpers/zod";
 import { ai } from "../lib/ai";
@@ -45,6 +46,7 @@ export async function executeRun(userId: string, id: string) {
     await db.run.update({ where: { id }, data: { logs } });
   };
   try {
+    await reserveRun(userId, id);
     const gh = await github(userId, run.identityId);
     const repo = await gh.request(`/repos/${run.repo}`);
     const base = await gh.request(
@@ -204,6 +206,7 @@ export async function executeRun(userId: string, id: string) {
       await approveRun(userId, id, approvedSha);
     }
   } catch (e) {
+    await releaseRun(id);
     const fresh = await db.run.findUniqueOrThrow({ where: { id } });
     if (fresh.status !== "cancelled") {
       await db.run.update({
@@ -225,6 +228,9 @@ export async function executeRun(userId: string, id: string) {
   }
 }
 export async function publish(userId: string, id: string) {
+  const current = await db.run.findFirstOrThrow({ where: { id, userId } });
+  if (current.status === "published") return;
+  await reserveRun(userId, id);
   return db.$transaction(
     async (tx) => {
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`run:${id}`}))`;

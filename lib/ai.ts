@@ -2,7 +2,13 @@ import { providerConfig, generateAI } from "./providers";
 import type OpenAI from "openai";
 import { limit, type OutputFormat } from "./providers/openai";
 import { db } from "./db";
-import { allowanceWindow, monthStart, nextMonth, settings, planLimits } from "./policy";
+import {
+  allowanceWindow,
+  monthStart,
+  nextMonth,
+  settings,
+  planLimits,
+} from "./policy";
 import { HttpError, rateLimit } from "./security";
 import { providerFingerprint } from "./provider-status";
 export class AllowanceError extends Error {
@@ -54,10 +60,7 @@ export async function ai(
           ) +
           512 +
           max;
-        if (
-          (usage._sum.total ?? 0) + reserve >
-          planLimits(u).tokens
-        )
+        if ((usage._sum.total ?? 0) + reserve > planLimits(u).tokens)
           throw new AllowanceError(
             "Plan token allowance exhausted; queued until next reset",
             nextMonth(),
@@ -136,8 +139,19 @@ export async function ai(
             },
           });
         else
-          await tx.providerConnection.deleteMany({
+          await tx.providerConnection.upsert({
             where: { id: provider.id },
+            create: {
+              id: provider.id,
+              fingerprint: providerFingerprint(),
+              model: provider.model,
+              verifiedAt: new Date(0),
+            },
+            update: {
+              fingerprint: providerFingerprint(),
+              model: provider.model,
+              verifiedAt: new Date(0),
+            },
           });
         return response;
       },
@@ -145,7 +159,20 @@ export async function ai(
     )
     .catch(async (error: unknown) => {
       // A failed request revokes previous connection health; do not retain stale success.
-      await db.providerConnection.deleteMany({ where: { id: provider.id } });
+      await db.providerConnection.upsert({
+        where: { id: provider.id },
+        create: {
+          id: provider.id,
+          fingerprint: providerFingerprint(),
+          model: provider.model,
+          verifiedAt: new Date(0),
+        },
+        update: {
+          fingerprint: providerFingerprint(),
+          model: provider.model,
+          verifiedAt: new Date(0),
+        },
+      });
       throw error;
     });
   if (result.failure) throw result.failure;
