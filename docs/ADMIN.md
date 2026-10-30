@@ -30,6 +30,8 @@ The `/admin` Server Component checks the live database-backed session and role b
 
 User search supports email/name substrings and exact user IDs, with 20 accounts per page. Account details show identity/session counts, repository summaries, plan ceilings and usage without passwords, identity tokens, or session IDs. Suspension requires a reason, revokes sessions/reset tokens, cancels active queued/running work and pending review runs, and blocks login, AI admission, job admission, autosync and worker claims. Administrator accounts cannot be suspended from this dashboard. Reactivation does not resurrect sessions, approval or cancelled work. Users sign in again; retries are explicit.
 
+Administrators can permanently delete an ordinary user from **Users and workspaces → View account → Delete user**. Enter the exact account email and a reason, then confirm. This deletes the account, sessions, connected credentials and workspace data; it does not delete repositories or pull requests on GitHub. Administrator and bootstrapped owner accounts are protected. If work is active, suspend the account first and wait for the worker lease to expire before retrying deletion. Payment receipts remain available to prevent payment reuse, and an `account.delete` audit entry records the administrator and reason.
+
 ## Plans, jobs and health
 
 Each account currently represents one personal workspace; there is no separate multi-member Workspace model. The dashboard summarizes accounts/workspaces, repositories, runs, job states, monthly/all-time actual token usage and usage by provider/model.

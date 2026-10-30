@@ -149,6 +149,8 @@ export function AdminDashboard({ ownerName }: { ownerName: string }) {
   const [planJobs, setPlanJobs] = useState("");
   const [planTokens, setPlanTokens] = useState("");
   const [reason, setReason] = useState("");
+  const [deleteEmail, setDeleteEmail] = useState("");
+  const [deleteReason, setDeleteReason] = useState("");
 
   useEffect(() => {
     let active = true;
@@ -189,6 +191,8 @@ export function AdminDashboard({ ownerName }: { ownerName: string }) {
         `admin/users/${encodeURIComponent(id)}`,
       );
       setAccount(value);
+      setDeleteEmail("");
+      setDeleteReason("");
       setReason("");
       setPlanName(value.planName ?? "");
       setPlanJobs(value.planMaxJobs?.toString() ?? "");
@@ -217,7 +221,12 @@ export function AdminDashboard({ ownerName }: { ownerName: string }) {
     setNotice("");
     try {
       await request(`admin/${path}`, body, "POST");
-      if (account) {
+      if (path.endsWith("/delete")) {
+        setAccount(null);
+        setDeleteEmail("");
+        setDeleteReason("");
+        setPage(1);
+      } else if (account) {
         const value: AccountDetail = await request(
           `admin/users/${encodeURIComponent(account.id)}`,
         );
@@ -604,6 +613,61 @@ export function AdminDashboard({ ownerName }: { ownerName: string }) {
                     {account.suspendedAt
                       ? "Reactivate account"
                       : "Suspend account"}
+                  </Button>
+                </form>
+              )}
+              {account.role !== "ADMIN" && (
+                <form
+                  className={styles.form}
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    if (deleteEmail !== account.email) return;
+                    if (
+                      window.confirm(
+                        `Permanently delete ${account.email} and their workspace data? This cannot be undone. On-chain payment receipts and audit history will be retained. GitHub repositories and pull requests will remain on GitHub.`,
+                      )
+                    )
+                      void change(
+                        `users/${account.id}/delete`,
+                        { email: deleteEmail, reason: deleteReason },
+                        "User and workspace deleted.",
+                      );
+                  }}
+                >
+                  <h3>Delete user</h3>
+                  <p>
+                    Permanently removes this account, sessions, connected
+                    credentials and workspace data. Active work must stop first.
+                    Payment receipts and audit history are retained.
+                  </p>
+                  <Field label="Email to confirm user deletion">
+                    <input
+                      required
+                      autoComplete="off"
+                      value={deleteEmail}
+                      onChange={(event) => setDeleteEmail(event.target.value)}
+                      placeholder={account.email}
+                    />
+                  </Field>
+                  <Field label="Reason for user deletion">
+                    <input
+                      required
+                      minLength={3}
+                      maxLength={500}
+                      value={deleteReason}
+                      onChange={(event) => setDeleteReason(event.target.value)}
+                    />
+                  </Field>
+                  <Button
+                    type="submit"
+                    busy={busy}
+                    disabled={
+                      busy ||
+                      deleteEmail !== account.email ||
+                      deleteReason.trim().length < 3
+                    }
+                  >
+                    Delete user permanently
                   </Button>
                 </form>
               )}

@@ -178,3 +178,64 @@ test("owner dashboard supports account controls, job inspection, health, and aud
     fullPage: true,
   });
 });
+
+test("administrator can confirm and delete a user from Users and workspaces", async ({
+  page,
+  baseURL,
+}) => {
+  const target = await db.user.create({
+    data: {
+      email: `delete-browser-${crypto.randomUUID()}@example.test`,
+      name: "User to delete",
+      password: "unused",
+    },
+  });
+  try {
+    expect(
+      (
+        await page.request.post("/api/auth/login", {
+          headers: { Origin: baseURL! },
+          data: { email: adminEmail, password: "browser-fixture-password-123" },
+        })
+      ).status(),
+    ).toBe(200);
+    await page.goto("/admin");
+    await page
+      .getByRole("navigation", { name: "Administration" })
+      .getByRole("button", { name: "Users", exact: true })
+      .click();
+    await page.getByLabel("Search users").fill(target.email);
+    await page.getByRole("button", { name: "Search", exact: true }).click();
+    await page
+      .getByRole("row")
+      .filter({ hasText: target.email })
+      .getByRole("button", { name: "View account", exact: true })
+      .click();
+    const remove = page.getByRole("button", {
+      name: "Delete user permanently",
+    });
+    await expect(remove).toBeDisabled();
+    await page.getByLabel("Email to confirm user deletion").fill(target.email);
+    await page.getByLabel("Reason for user deletion").fill("Requested removal");
+    page.once("dialog", (dialog) => dialog.dismiss());
+    await remove.click();
+    await expect(
+      page.getByRole("region", { name: "Account details" }),
+    ).toBeVisible();
+    page.once("dialog", (dialog) => dialog.accept());
+    await remove.click();
+    await expect(
+      page.getByText("User and workspace deleted.", { exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("region", { name: "Account details" }),
+    ).toHaveCount(0);
+    await expect(
+      page.getByRole("table").getByText(target.email, { exact: false }),
+    ).toHaveCount(0);
+    expect(await db.user.findUnique({ where: { id: target.id } })).toBeNull();
+  } finally {
+    await db.adminAudit.deleteMany({ where: { targetId: target.id } });
+    await db.user.deleteMany({ where: { id: target.id } });
+  }
+});

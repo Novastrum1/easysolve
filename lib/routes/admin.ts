@@ -305,6 +305,76 @@ export async function handleAdmin({ request, path, body, url }: RouteContext) {
     throw new HttpError(405, "Use POST for admin changes");
   if (path[1] === "users" && path.length === 4) {
     const targetId = id.parse(path[2]);
+    if (path[3] === "delete") {
+      const input = z
+        .object({
+          email: z.string().min(1).max(254),
+          reason: z.string().trim().min(3).max(500),
+        })
+        .strict()
+        .parse(body);
+      await adminTransaction(actor.id, async (tx) => {
+        // Prevent a worker from claiming work between the check and deletion.
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('easysolve:claim'))`;
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('easysolve:payments'))`;
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${targetId}))`;
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`usage:${targetId}`}))`;
+        const target = await tx.user.findUnique({
+          where: { id: targetId },
+          select: accountSelect,
+        });
+        if (!target) throw new HttpError(404, "Account not found");
+        const bootstrap = await tx.adminBootstrap.findUnique({
+          where: { id: "owner" },
+        });
+        if (
+          target.role === "ADMIN" ||
+          target.id === actor.id ||
+          bootstrap?.userId === target.id
+        )
+          throw new HttpError(
+            409,
+            "Administrator and owner accounts cannot be deleted here",
+          );
+        if (input.email !== target.email)
+          throw new HttpError(
+            422,
+            "Type the account email exactly to confirm deletion",
+          );
+        if (
+          await tx.job.count({
+            where: {
+              userId: targetId,
+              OR: [{ status: "running" }, { leaseUntil: { gt: new Date() } }],
+            },
+          })
+        )
+          throw new HttpError(
+            409,
+            "Suspend this account and wait for active work to stop before deleting it",
+          );
+        // Preserve verified transaction identities so a payment cannot be credited again.
+        await tx.paymentReceipt.updateMany({
+          where: { invoice: { userId: targetId } },
+          data: { invoiceId: null },
+        });
+        // Grants can reference invoices; remove them before cascading invoice deletion.
+        await tx.entitlementGrant.deleteMany({ where: { userId: targetId } });
+        await tx.user.delete({ where: { id: targetId } });
+        await tx.adminAudit.create({
+          data: {
+            actorId: actor.id,
+            targetId,
+            action: "account.delete",
+            reason: redactDiagnostic(input.reason)!,
+            oldValues: { role: target.role, suspended: !!target.suspendedAt },
+            newValues: { deleted: true },
+            details: { paymentReceiptsRetained: true },
+          },
+        });
+      });
+      return json({ ok: true });
+    }
     if (path[3] === "status") {
       const input = z
         .object({

@@ -110,6 +110,156 @@ afterAll(async () => {
   await db.$disconnect();
 });
 
+it("deletes ordinary users with confirmation, preserving payment receipts and an audit record", async () => {
+  const target = await db.user.create({
+    data: {
+      email: `delete-test-${crypto.randomUUID()}@example.test`,
+      name: "Deletion fixture",
+      password: "unused",
+    },
+  });
+  ids.push(target.id);
+  const body = {
+    email: target.email,
+    reason: "Remove requested test workspace",
+  };
+  const path = `admin/users/${target.id}/delete`;
+  token = "";
+  expect((await call(path, body)).status).toBe(401);
+  await as(ordinaryId);
+  expect((await call(path, body)).status).toBe(403);
+  await as(adminId);
+  expect((await call(path, body, "POST", "https://evil.test")).status).toBe(
+    403,
+  );
+  expect((await call(path, { ...body, reason: "" })).status).toBe(422);
+  expect(
+    (await call(path, { ...body, email: "wrong@example.test" })).status,
+  ).toBe(422);
+  const admin = await db.user.findUniqueOrThrow({ where: { id: adminId } });
+  expect(
+    (
+      await call(`admin/users/${adminId}/delete`, {
+        ...body,
+        email: admin.email,
+      })
+    ).status,
+  ).toBe(409);
+  const active = await db.job.create({
+    data: {
+      userId: target.id,
+      kind: "sync",
+      key: `delete:${crypto.randomUUID()}`,
+      payload: {},
+      status: "running",
+      leaseUntil: new Date(Date.now() + 60000),
+    },
+  });
+  expect((await call(path, body)).status).toBe(409);
+  await db.job.update({
+    where: { id: active.id },
+    data: { status: "cancelled" },
+  });
+  expect((await call(path, body)).status).toBe(409);
+  await db.job.update({
+    where: { id: active.id },
+    data: { leaseUntil: new Date(0) },
+  });
+  await db.session.create({
+    data: {
+      id: hash(`delete-session-${target.id}`),
+      userId: target.id,
+      expiresAt: new Date(Date.now() + 60000),
+    },
+  });
+  await db.reset.create({
+    data: {
+      id: hash(`delete-reset-${target.id}`),
+      userId: target.id,
+      expiresAt: new Date(Date.now() + 60000),
+    },
+  });
+  await db.identity.create({
+    data: {
+      userId: target.id,
+      login: "delete-fixture",
+      token: "encrypted-fixture",
+    },
+  });
+  await db.repository.create({
+    data: {
+      userId: target.id,
+      identityId: "fixture",
+      fullName: "fixture/delete",
+    },
+  });
+  const plan = await db.planVersion.findFirstOrThrow();
+  const invoice = await db.invoice.create({
+    data: {
+      userId: target.id,
+      planVersionId: plan.id,
+      network: "testnet",
+      recipient: "fixture",
+      assetCode: "USDC",
+      issuer: "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
+      amount: "5.0000000",
+      memo: crypto.randomUUID().replaceAll("-", "").slice(0, 26),
+      terms: {},
+      expiresAt: new Date(),
+    },
+  });
+  const receipt = await db.paymentReceipt.create({
+    data: {
+      network: "testnet",
+      operationId: crypto.randomUUID(),
+      transactionHash: "fixture",
+      invoiceId: invoice.id,
+      recipient: "fixture",
+      assetCode: "USDC",
+      issuer: "fixture",
+      amount: "5.0000000",
+      ledger: 1,
+      paidAt: new Date(),
+      status: "verified",
+      detail: "Deletion test",
+    },
+  });
+  try {
+    await db.entitlementGrant.create({
+      data: {
+        userId: target.id,
+        invoiceId: invoice.id,
+        source: "testnet_payment",
+        reason: "Test receipt",
+      },
+    });
+    expect((await call(path, body)).status).toBe(200);
+    expect(await db.user.findUnique({ where: { id: target.id } })).toBeNull();
+    for (const model of [
+      db.session,
+      db.reset,
+      db.identity,
+      db.repository,
+      db.job,
+      db.invoice,
+      db.entitlementGrant,
+    ] as any[])
+      expect(await model.count({ where: { userId: target.id } })).toBe(0);
+    expect(
+      (await db.paymentReceipt.findUniqueOrThrow({ where: { id: receipt.id } }))
+        .invoiceId,
+    ).toBeNull();
+    const audit = await db.adminAudit.findFirstOrThrow({
+      where: { targetId: target.id, action: "account.delete" },
+    });
+    expect(audit.actorId).toBe(adminId);
+    expect(audit.reason).toBe(body.reason);
+    expect((await call(path, body)).status).toBe(404);
+  } finally {
+    await db.paymentReceipt.delete({ where: { id: receipt.id } });
+  }
+});
+
 it("requires a live admin session for every admin API and the page's authorization helper", async () => {
   token = "";
   expect((await call("admin/overview")).status).toBe(401);
