@@ -1,38 +1,38 @@
 "use client";
 import {
-ArrowRight,
-Check,
-Copy,
-FileCode2,
-FolderGit2,
-GitMerge,
-LoaderCircle,
-Plus,
-RefreshCw,
-Search,
-Send,
-ShieldCheck,
-Sparkles,
-Users,
-Waves,
+  ArrowRight,
+  Check,
+  Copy,
+  FileCode2,
+  FolderGit2,
+  GitMerge,
+  LoaderCircle,
+  Plus,
+  RefreshCw,
+  Search,
+  Send,
+  ShieldCheck,
+  Sparkles,
+  Users,
+  Waves,
 } from "lucide-react";
 import { useState } from "react";
 import {
-Badge,
-Button,
-Diff,
-Empty,
-External,
-Field,
-Modal,
-Panel,
-SearchBox,
-Select,
-label,
-request,
+  Badge,
+  Button,
+  Diff,
+  Empty,
+  External,
+  Field,
+  Modal,
+  Panel,
+  SearchBox,
+  Select,
+  label,
+  request,
 } from "../ui";
 import type { Context } from "../workspace";
-import { Identity,PageHead } from "../workspace";
+import { Identity, PageHead } from "../workspace";
 export function DiscoverPage(c: Context) {
   const [repo, setRepo] = useState(""),
     [issues, setIssues] = useState<any[]>([]),
@@ -44,7 +44,8 @@ export function DiscoverPage(c: Context) {
     [issue, setIssue] = useState<any>(null),
     [experience, setExperience] = useState(""),
     [draft, setDraft] = useState<any>(null),
-    [confirm, setConfirm] = useState(false),[analysis,setAnalysis]=useState('');
+    [confirm, setConfirm] = useState(false),
+    [analysis, setAnalysis] = useState("");
   const search = async (e: React.FormEvent) => {
     e.preventDefault();
     setBusy(true);
@@ -142,7 +143,8 @@ export function DiscoverPage(c: Context) {
                 key={i.number}
                 onClick={() => {
                   setIssue(i);
-                  setDraft(null);setAnalysis('');
+                  setDraft(null);
+                  setAnalysis("");
                 }}
               >
                 <div>
@@ -215,7 +217,34 @@ export function DiscoverPage(c: Context) {
               Add to my issues
             </Button>
           </div>
-          <div className="action-row"><Button variant="secondary" busy={busy} disabled={!c.data.health.ai} onClick={async()=>{setBusy(true);try{const r=await c.act('issues/analyze',{identityId:c.identity,repo:issue.repo,number:issue.number});setAnalysis(r.analysis);}catch{}finally{setBusy(false);}}}><Sparkles size={15}/>Analyze issue</Button></div>{analysis&&<div className="issue-description" aria-label="AI issue analysis">{analysis}</div>}
+          <div className="action-row">
+            <Button
+              variant="secondary"
+              busy={busy}
+              onClick={async () => {
+                setBusy(true);
+                try {
+                  const r = await c.act("issues/analyze", {
+                    identityId: c.identity,
+                    repo: issue.repo,
+                    number: issue.number,
+                  });
+                  setAnalysis(r.analysis);
+                } catch {
+                } finally {
+                  setBusy(false);
+                }
+              }}
+            >
+              <Sparkles size={15} />
+              Analyze issue
+            </Button>
+          </div>
+          {analysis && (
+            <div className="issue-description" aria-label="AI issue analysis">
+              {analysis}
+            </div>
+          )}
           {!draft ? (
             <>
               <Field
@@ -231,7 +260,6 @@ export function DiscoverPage(c: Context) {
               </Field>
               <Button
                 busy={busy}
-                disabled={!c.data.health.ai}
                 onClick={async () => {
                   setBusy(true);
                   try {
@@ -447,11 +475,7 @@ export function WavePage(c: Context) {
                 <input name="numbers" placeholder="12, 34, 56" />
               </Field>
             </div>
-            <Button
-              type="submit"
-              busy={busy}
-              disabled={!c.identity || !c.data.health.ai}
-            >
+            <Button type="submit" busy={busy} disabled={!c.identity}>
               <Sparkles size={16} />
               Prepare applications
             </Button>

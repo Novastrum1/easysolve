@@ -175,17 +175,6 @@ export function UsagePage(c: Context) {
   const u = c.data.usage;
   const sum = (key: string) => u.reduce((n: number, v: any) => n + v[key], 0);
   const config = c.data.settings;
-  const cost = u.reduce(
-    (n: number, v: any) =>
-      n +
-      (v.provider === "deepseek"
-        ? ((v.input - v.cached) * config.deepseekInputPrice +
-            v.cached * config.deepseekCachedPrice +
-            v.output * config.deepseekOutputPrice) /
-          1000000
-        : 0),
-    0,
-  );
   const days = Array.from({ length: new Date().getUTCDate() }, (_, i) => {
     const date = new Date();
     date.setUTCDate(i + 1);
@@ -202,7 +191,7 @@ export function UsagePage(c: Context) {
       <PageHead
         eyebrow="EVERY TOKEN, ACCOUNTED FOR"
         title="A clear view of your AI usage."
-        description="Actual provider-reported tokens. Transparent estimates. Your allowance, under your control."
+        description="Actual usage records. Your allowance, under your control."
       />
       <div className="stat-grid">
         {[
@@ -270,18 +259,6 @@ export function UsagePage(c: Context) {
               <span>Requests</span>
               <strong>{u.length}</strong>
             </div>
-            <div>
-              <span>DeepSeek estimate</span>
-              <strong>
-                {config.deepseekInputPrice || config.deepseekOutputPrice
-                  ? `$${cost.toFixed(4)}`
-                  : "Pricing not configured"}
-              </strong>
-            </div>
-            <small>
-              Estimate covers DeepSeek records only at your configured prices
-              per million tokens; it is not an invoice.
-            </small>
           </div>
         </Panel>
       </div>
@@ -441,30 +418,26 @@ export function SettingsPage(c: Context) {
             </a>
           </div>
         </Panel>
-        <Panel title="Usage & estimated pricing">
+        <Panel title="Usage limits">
           <div className="settings-fields form-grid">
             {[
               ["monthlyTokens", "Monthly token allowance", 1000],
               ["monthlyJobs", "Monthly jobs", 1],
               ["resetDay", "Allowance reset day (UTC, 1–28)", 1],
               ["resetHour", "Allowance reset hour (UTC, 0–23)", 0],
-              ["deepseekInputPrice", "Input / 1M tokens ($)", 0],
-              ["deepseekCachedPrice", "Cached / 1M tokens ($)", 0],
-              ["deepseekOutputPrice", "Output / 1M tokens ($)", 0],
             ].map(([key, title, min]) => (
               <Field key={key} label={String(title)}>
                 <input
                   type="number"
                   min={Number(min)}
-                  step={String(key).includes("Price") ? "0.01" : "1"}
+                  step="1"
                   value={config[key]}
                   onChange={(e) => update(String(key), Number(e.target.value))}
                 />
               </Field>
             ))}
             <small className="muted">
-              Plan entitlements cap your configured limits. Enter model pricing
-              from your provider contract.
+              Plan entitlements cap your configured limits.
             </small>
           </div>
         </Panel>
@@ -476,8 +449,7 @@ export function AccountPage(c: Context) {
   const [token, setToken] = useState(""),
     [busy, setBusy] = useState(false),
     [disconnect, setDisconnect] = useState<any>(null),
-    [name, setName] = useState(c.data.user.name),
-    [testingProvider, setTestingProvider] = useState(false);
+    [name, setName] = useState(c.data.user.name);
   return (
     <>
       <PageHead
@@ -515,69 +487,6 @@ export function AccountPage(c: Context) {
           </form>
         </Panel>
         <AccountEntitlements {...c} />
-        <Panel
-          title={`${c.data.health.provider.name} connection`}
-          description="API keys are configured on the server, never sent to the browser."
-        >
-          <div className="connection-large">
-            <div className="row-icon emerald">
-              <Zap size={22} />
-            </div>
-            <div>
-              <strong>
-                {c.data.health.provider.name} ·{" "}
-                {c.data.health.provider.modelName || "Model selection required"}
-                {c.data.health.provider.region &&
-                  ` · ${c.data.health.provider.region}`}
-              </strong>
-              <Badge
-                status={
-                  c.data.health.provider.verified
-                    ? "connection_verified"
-                    : c.data.health.provider.connectionFailed
-                      ? "connection_failed"
-                      : c.data.health.ai
-                        ? "configured"
-                        : "setup_required"
-                }
-              />
-            </div>
-          </div>
-          <p className="muted">
-            {c.data.health.provider.verified
-              ? `Connection verified ${new Date(c.data.health.provider.verifiedAt).toLocaleString()}`
-              : c.data.health.provider.connectionFailed
-                ? "Connection failed. Check server configuration and model access, then retry."
-                : "Connection not verified. Configuration alone does not confirm model access."}
-          </p>
-          {c.data.user.providerAdmin && (
-            <Button
-              variant="secondary"
-              busy={testingProvider}
-              onClick={async () => {
-                setTestingProvider(true);
-                try {
-                  await c.act("provider/test", {});
-                } catch {
-                  await c.refresh();
-                } finally {
-                  setTestingProvider(false);
-                }
-              }}
-            >
-              Test {c.data.health.provider.name} connection
-            </Button>
-          )}
-          {!c.data.health.ai && (
-            <div className="settings-fields">
-              <p className="muted">
-                Ask your operator to configure the selected provider’s API key
-                and model in the server environment, then restart the app and
-                worker.
-              </p>
-            </div>
-          )}
-        </Panel>
       </div>
       <Panel
         title="GitHub identities"

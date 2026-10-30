@@ -1,5 +1,4 @@
 import { handleBilling } from "./routes/billing";
-import { providerConfig } from "./providers";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { AuthInputError } from "./auth-input";
@@ -35,9 +34,6 @@ export async function api(request: Request, path: string[]) {
       await db.$queryRaw`SELECT 1`;
       return json({
         ok: true,
-        ai: providerConfig().configured,
-        provider: providerConfig().id,
-        encryption: !!process.env.TOKEN_ENCRYPTION_KEY,
       });
     }
     const body =

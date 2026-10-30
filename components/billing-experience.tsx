@@ -123,13 +123,6 @@ export function BillingExperience() {
         title="A plan that’s clear about its limits."
         description="Issue allowances, connected accounts and independently verified Stellar payments."
       />
-      {data.provider?.connectionFailed && (
-        <p role="alert" className="subtle-notice">
-          AI generation currently reports a provider failure. Payment grants
-          plan access; it does not restore the AI provider. Please consider this
-          before purchasing.
-        </p>
-      )}
       {error && (
         <p role="alert" className="subtle-notice">
           {error}

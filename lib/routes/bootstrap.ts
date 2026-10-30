@@ -1,7 +1,6 @@
 import { entitlementSummary } from "../entitlements";
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { providerStatus, isProviderAdmin } from "../provider-status";
 import { db } from "../db";
 import {
   allowanceWindow,
@@ -100,12 +99,18 @@ export async function handleBootstrap({
         },
       }),
     ]);
-    const window = allowanceWindow(settings(u.settings));
+    const fullSettings = settings(u.settings);
+    const {
+      deepseekInputPrice: _inputPrice,
+      deepseekCachedPrice: _cachedPrice,
+      deepseekOutputPrice: _outputPrice,
+      ...customerSettings
+    } = fullSettings;
+    const window = allowanceWindow(fullSettings);
     const cycleUsage = await db.usage.aggregate({
       where: { userId: u.id, createdAt: { gte: window.start } },
       _sum: { total: true },
     });
-    const provider = await providerStatus();
     const entitlements = await entitlementSummary(u.id);
     return json({
       allowance: {
@@ -117,24 +122,20 @@ export async function handleBootstrap({
         id: u.id,
         name: u.name,
         email: u.email,
-        role: u.role,
-        providerAdmin: await isProviderAdmin(u.id),
       },
       identities,
       repositories,
       issues,
       runs,
       messages,
-      usage,
+      usage: usage.map(
+        ({ provider: _provider, model: _model, ...record }) => record,
+      ),
       applications,
       proposals,
       jobs,
-      settings: settings(u.settings),
-      health: {
-        ai: provider.configured,
-        provider,
-        encryption: !!process.env.TOKEN_ENCRYPTION_KEY,
-      },
+      settings: customerSettings,
+      health: { encryption: !!process.env.TOKEN_ENCRYPTION_KEY },
       limits: {
         jobs: planLimits(u).jobs,
         tokens: planLimits(u).tokens,

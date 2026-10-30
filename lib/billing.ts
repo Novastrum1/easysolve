@@ -1,4 +1,3 @@
-import { providerStatus } from "./provider-status";
 import { randomBytes } from "node:crypto";
 import { db } from "./db";
 import { HttpError } from "./security";
@@ -52,7 +51,6 @@ export async function billingSummary(userId: string) {
     ...safeSettings
   } = p.settings;
   return {
-    provider: await providerStatus(),
     version: p.version,
     settings: safeSettings,
     checkoutReady: !checkoutBlockers(p.settings).length,

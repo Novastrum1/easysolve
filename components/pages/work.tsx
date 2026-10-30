@@ -313,7 +313,7 @@ export function ChatPage(c: Context) {
             style={{ whiteSpace: "pre-wrap" }}
           >
             <LoaderCircle size={16} className="spin" />
-            {streamText || "DeepSeek is inspecting your workspace…"}
+            {streamText || "EasySolve is inspecting your workspace…"}
           </div>
         )}
         <div ref={end} />
@@ -333,20 +333,6 @@ export function ChatPage(c: Context) {
           rows={3}
         />
         <div>
-          <span>
-            <span
-              className={
-                c.data.health.provider.verified ? "online-dot" : "offline-dot"
-              }
-            />
-            {c.data.health.provider.connectionFailed
-              ? `${c.data.health.provider.name} connection failed`
-              : c.data.health.provider.verified
-                ? `${c.data.health.provider.name} verified`
-                : c.data.health.ai
-                  ? `${c.data.health.provider.name} configured but unverified`
-                  : `${c.data.health.provider.name} not configured`}
-          </span>
           <div>
             <button
               className={`icon-button ${dictating ? "recording" : ""}`}
@@ -367,7 +353,7 @@ export function ChatPage(c: Context) {
             )}
             <Button
               busy={busy}
-              disabled={!text.trim() || !c.data.health.ai}
+              disabled={!text.trim()}
               onClick={() => void send()}
               aria-label="Send message"
             >

@@ -1,7 +1,7 @@
 import { connectGithubAccount, chooseGithubAccounts } from "../github-accounts";
 import { entitlementSummary } from "../entitlements";
 import { ai } from "../ai";
-import { isProviderAdmin, providerStatus } from "../provider-status";
+import { providerStatus } from "../provider-status";
 import { rateLimit } from "../security";
 import bcrypt from "bcryptjs";
 import { cookies } from "next/headers";
@@ -26,11 +26,8 @@ export async function handleAccount({
   const route = path.join("/");
   const method = request.method;
   if (route === "provider/test") {
-    if (!(await isProviderAdmin(u.id)))
-      throw new HttpError(
-        403,
-        "Only a configured provider administrator can test the shared AI connection.",
-      );
+    if (u.role !== "ADMIN")
+      throw new HttpError(403, "Administrator access required");
     await rateLimit(`provider-test:${u.id}`, 2);
     await ai(
       u.id,
@@ -71,7 +68,13 @@ export async function handleAccount({
     return json({ ok: true });
   }
   if (route === "settings") {
-    const input = settingsSchema.parse(body);
+    const current = settingsSchema.parse(u.settings ?? {});
+    const input = settingsSchema.parse({
+      ...body,
+      deepseekInputPrice: current.deepseekInputPrice,
+      deepseekCachedPrice: current.deepseekCachedPrice,
+      deepseekOutputPrice: current.deepseekOutputPrice,
+    });
     await db.user.update({ where: { id: u.id }, data: { settings: input } });
     return json({ ok: true });
   }

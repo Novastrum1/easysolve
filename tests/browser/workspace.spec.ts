@@ -8,6 +8,7 @@ test.afterAll(async () => {
 });
 test("signup, every workspace screen, persistence, responsive navigation and logout", async ({
   page,
+  baseURL,
 }, info) => {
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
@@ -68,19 +69,26 @@ test("signup, every workspace screen, persistence, responsive navigation and log
       page.getByRole("heading", { name: heading, exact: true }),
     ).toBeVisible();
     if (name === "Account") {
-      await expect(
-        page.getByText(
-          `DeepSeek · ${process.env.DEEPSEEK_MODEL || "deepseek-flash"}`,
-          { exact: true },
-        ),
-      ).toBeVisible();
-      await expect(
-        page.getByRole("button", {
-          name: /Test DeepSeek connection/,
-        }),
-      ).toHaveCount(0);
       await expect(page.getByText("DeepSeek", { exact: true })).toHaveCount(0);
+      await expect(
+        page.getByText(/Check verification in Account/i),
+      ).toHaveCount(0);
     }
+    await expect(page.getByText("ADMINISTRATION", { exact: true })).toHaveCount(
+      0,
+    );
+    await expect(
+      page.getByText("Owner dashboard", { exact: true }),
+    ).toHaveCount(0);
+    await expect(
+      page.getByText("DeepSeek verified", { exact: true }),
+    ).toHaveCount(0);
+    const bootstrap = await page.request.get(`${baseURL}/api/bootstrap`);
+    expect(bootstrap.status()).toBe(200);
+    const payload = await bootstrap.json();
+    expect(payload.user.role).toBeUndefined();
+    expect(payload.user.providerAdmin).toBeUndefined();
+    expect(payload.health?.provider).toBeUndefined();
     expect(
       await page.evaluate(
         () => document.documentElement.scrollWidth <= window.innerWidth + 1,

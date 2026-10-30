@@ -286,15 +286,6 @@ export function Workspace() {
           <ChevronRight size={14} />
         </button>
         <nav aria-label="Main navigation">
-          {data.user.role === "ADMIN" && (
-            <div className="nav-group">
-              <p>Administration</p>
-              <Link href="/admin">
-                <ShieldCheck size={18} />
-                <span>Owner dashboard</span>
-              </Link>
-            </div>
-          )}
           {nav.map((g) => (
             <div className="nav-group" key={g.group}>
               <p>{g.group}</p>
@@ -329,36 +320,6 @@ export function Workspace() {
           ))}
         </nav>
         <div className="sidebar-bottom">
-          <div className="agent-status">
-            <span
-              className={
-                data.health.provider.verified ? "online-dot" : "offline-dot"
-              }
-            />
-            <span>
-              {data.health.provider.connectionFailed
-                ? `${data.health.provider.name} connection failed`
-                : data.health.provider.verified
-                  ? `${data.health.provider.name} verified`
-                  : data.health.ai
-                    ? `${data.health.provider.name} configured`
-                    : `${data.health.provider.name} setup required`}
-              <small>
-                {data.health.provider.connectionFailed
-                  ? "Check connection settings"
-                  : data.health.ai
-                    ? "Check verification in Account"
-                    : "Set up to start solving"}
-              </small>
-            </span>
-            <a
-              href="/account"
-              title="Connection settings"
-              aria-label="Connection settings"
-            >
-              <ChevronRight size={16} />
-            </a>
-          </div>
           <button
             className="collapse-button"
             onClick={() => setCollapsed((v) => !v)}
@@ -879,19 +840,6 @@ function Overview(
               <span
                 className={`connection-dot ${d.identities.length ? "on" : ""}`}
               />
-            </div>
-            <div className="connection-row">
-              <Sparkles size={21} />
-              <div>
-                <strong>
-                  {d.health.provider.name} ·{" "}
-                  {d.health.provider.modelName || "Model selection required"}
-                </strong>
-                <small>
-                  {d.health.ai ? "API key configured" : "API key required"}
-                </small>
-              </div>
-              <span className={`connection-dot ${d.health.ai ? "on" : ""}`} />
             </div>
             <a className="panel-bottom-link" href="/account">
               Manage connections
