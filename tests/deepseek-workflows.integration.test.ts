@@ -6,7 +6,7 @@ const { create, gh } = vi.hoisted(() => ({
 }));
 vi.mock("openai", () => ({
   default: class {
-    responses = { create };
+    chat = { completions: { create } };
   },
 }));
 vi.mock("../lib/github", () => ({ github: vi.fn().mockResolvedValue(gh) }));
@@ -31,20 +31,32 @@ const issue = {
 function events(text: string, calls: any[] = []) {
   return (async function* () {
     yield {
-      type: "response.completed",
-      response: {
-        status: "completed",
-        model: "gpt-6-astra",
-        output: calls.length
-          ? calls
-          : [{ type: "message", content: [{ type: "output_text", text }] }],
-        usage: {
-          input_tokens: 20,
-          input_tokens_details: { cached_tokens: 5 },
-          output_tokens: 10,
-          output_tokens_details: { reasoning_tokens: 4 },
-          total_tokens: 30,
+      model: "deepseek-flash",
+      choices: [
+        {
+          index: 0,
+          delta: {
+            content: text,
+            ...(calls.length
+              ? {
+                  tool_calls: calls.map((c, index) => ({
+                    index,
+                    id: `call-${index}`,
+                    type: "function",
+                    function: { name: c.name, arguments: c.arguments },
+                  })),
+                }
+              : {}),
+          },
+          finish_reason: calls.length ? "tool_calls" : "stop",
         },
+      ],
+      usage: {
+        prompt_tokens: 20,
+        completion_tokens: 10,
+        total_tokens: 30,
+        prompt_cache_hit_tokens: 5,
+        completion_tokens_details: { reasoning_tokens: 4 },
       },
     };
   })();
@@ -58,10 +70,11 @@ function call(name: string, args: unknown = {}) {
       { type: "function_call", name, arguments: JSON.stringify(args) },
     ]),
   );
+  reply("Here is the validated result; confirmation is still required.");
 }
 beforeAll(async () => {
-  process.env.AI_PROVIDER = "openai";
-  process.env.OPENAI_API_KEY = "mocked-provider-fixture";
+  process.env.AI_PROVIDER = "deepseek";
+  process.env.DEEPSEEK_API_KEY = "mocked-provider-fixture";
   userId = (
     await db.user.create({
       data: {
@@ -73,7 +86,8 @@ beforeAll(async () => {
     })
   ).id;
 });
-beforeEach(() => {
+beforeEach(async () => {
+  await db.rateLimit.deleteMany({ where: { key: `ai:${userId}` } });
   vi.clearAllMocks();
   create.mockReset();
 });
@@ -107,12 +121,11 @@ it("persists chat, validates real tool calls, and does not start unconfirmed job
   expect(await db.run.count({ where: { userId } })).toBe(0);
   expect(await db.message.count({ where: { userId } })).toBe(6);
   expect(create.mock.calls[0][0]).toMatchObject({
-    model: "gpt-6-astra",
+    model: "deepseek-flash",
     tools: expect.any(Array),
-    parallel_tool_calls: false,
   });
 });
-it("routes analysis, editable drafts, contribution matching and planning through OpenAI", async () => {
+it("routes analysis, editable drafts, contribution matching and planning through DeepSeek", async () => {
   reply("Inspect the arithmetic module and add a regression test.");
   expect(await analyzeIssue(userId, issue)).toContain("regression");
   reply("I can add a Node test based on my supplied experience.");
@@ -137,9 +150,8 @@ it("routes analysis, editable drafts, contribution matching and planning through
     numbers: [],
   });
   expect(result.applications[0].draft).toContain("Editable");
-  expect(create.mock.calls[2][0].text.format).toMatchObject({
-    type: "json_schema",
-    strict: true,
+  expect(create.mock.calls[2][0].response_format).toMatchObject({
+    type: "json_object",
   });
   const [run] = await startRuns(userId, [
     (await db.issue.findFirstOrThrow({ where: { userId } })).id,
@@ -217,11 +229,12 @@ it("tests the actual worker read, failing test, repair, test and approval path w
   expect(gh.request.mock.calls.every((c) => !c[1] || c[1] === "GET")).toBe(
     true,
   );
-  expect(create.mock.calls[0][0].text.format).toMatchObject({
-    type: "json_schema",
-    strict: true,
+  expect(create.mock.calls[0][0].response_format).toMatchObject({
+    type: "json_object",
   });
-  expect(create.mock.calls[2][0].input).toContain("exitCode");
+  expect(JSON.stringify(create.mock.calls[2][0].messages)).toContain(
+    "exitCode",
+  );
   expect(
     await db.usage.count({
       where: { userId, runId: run.id, purpose: "repair" },
@@ -240,25 +253,25 @@ it("denies non-admin connection tests and binds verification to key/model", asyn
     u,
   };
   delete process.env.AI_ADMIN_USER_IDS;
-  delete process.env.OPENAI_ADMIN_USER_IDS;
+  delete process.env.AI_ADMIN_USER_IDS;
   await expect(handleAccount(ctx)).rejects.toMatchObject({ status: 403 });
   expect(create).not.toHaveBeenCalled();
-  process.env.OPENAI_ADMIN_USER_IDS = userId;
+  await db.user.update({ where: { id: userId }, data: { role: "ADMIN" } });
   reply("EASYSOLVE_OK");
-  const response = await handleAccount(ctx);
+  const response = await handleAccount({ ...ctx, u: { ...u, role: "ADMIN" } });
   expect(await response!.json()).toMatchObject({
     configured: true,
     verified: true,
-    modelName: "GPT-6 Astra",
+    modelName: "deepseek-flash",
   });
-  process.env.OPENAI_MODEL = "other-model";
+  process.env.DEEPSEEK_MODEL = "other-model";
   expect((await providerStatus()).verified).toBe(false);
-  delete process.env.OPENAI_MODEL;
-  process.env.OPENAI_API_KEY = "another-fixture";
+  delete process.env.DEEPSEEK_MODEL;
+  process.env.DEEPSEEK_API_KEY = "another-fixture";
   expect((await providerStatus()).verified).toBe(false);
-  process.env.OPENAI_API_KEY = "mocked-provider-fixture";
+  process.env.DEEPSEEK_API_KEY = "mocked-provider-fixture";
   delete process.env.AI_ADMIN_USER_IDS;
-  delete process.env.OPENAI_ADMIN_USER_IDS;
+  delete process.env.AI_ADMIN_USER_IDS;
 });
 it("enforces input, job token/request budgets, and request rate ceilings before SDK calls", async () => {
   for (const [name, value, runId] of [
@@ -284,17 +297,13 @@ it("preserves billed incomplete usage and reasoning without accepting partial ou
   create.mockResolvedValueOnce(
     (async function* () {
       yield {
-        type: "response.incomplete",
-        response: {
-          status: "incomplete",
-          model: "gpt-6-astra",
-          output: [],
-          usage: {
-            input_tokens: 10,
-            output_tokens: 5,
-            total_tokens: 15,
-            output_tokens_details: { reasoning_tokens: 4 },
-          },
+        model: "deepseek-flash",
+        choices: [{ index: 0, delta: {}, finish_reason: "length" }],
+        usage: {
+          prompt_tokens: 10,
+          completion_tokens: 5,
+          total_tokens: 15,
+          completion_tokens_details: { reasoning_tokens: 4 },
         },
       };
     })(),
@@ -304,6 +313,51 @@ it("preserves billed incomplete usage and reasoning without accepting partial ou
   ).rejects.toMatchObject({ code: "AI_INCOMPLETE" });
   expect(
     await db.usage.findFirst({ where: { userId, purpose: "incomplete" } }),
-  ).toMatchObject({ provider: "openai", total: 15, reasoning: 4 });
+  ).toMatchObject({ provider: "deepseek", total: 15, reasoning: 4 });
   expect((await providerStatus()).verified).toBe(false);
 });
+
+it("streams visible chat text through the real route and persists the final response", async () => {
+  const { handleContribution } = await import("../lib/routes/contribution");
+  const u = await db.user.findUniqueOrThrow({ where: { id: userId } });
+  reply("Streamed DeepSeek answer");
+  const response = await handleContribution({
+    request: new Request("http://localhost:3000/api/chat", {
+      method: "POST",
+      headers: { Accept: "application/x-ndjson" },
+    }),
+    path: ["chat"],
+    body: { text: "Stream a response", conversation: "stream-test" },
+    url: new URL("http://localhost:3000/api/chat"),
+    u,
+  });
+  expect(response!.headers.get("content-type")).toBe("application/x-ndjson");
+  const frames = (await response!.text())
+    .trim()
+    .split("\n")
+    .map((line) => JSON.parse(line));
+  expect(frames[0]).toEqual({ type: "text", text: "Streamed DeepSeek answer" });
+  expect(frames.at(-1)).toMatchObject({
+    type: "complete",
+    message: { content: "Streamed DeepSeek answer" },
+  });
+});
+
+it.each([
+  "null",
+  '{"answer":{"nested":"value"}}',
+  "```js\nconsole.log('ok')\n```",
+])(
+  "saves ordinary model text literally, including JSON and code: %s",
+  async (text) => {
+    reply(text);
+    const result = await chat(
+      userId,
+      "Return the requested text without tools",
+      undefined,
+      `literal-${crypto.randomUUID()}`,
+    );
+    expect(result.content).toBe(text);
+    expect(result.activity).toEqual([]);
+  },
+);

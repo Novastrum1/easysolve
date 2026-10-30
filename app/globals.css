@@ -907,6 +907,87 @@ footer img {
   overflow-x: auto;
   max-width: 100%;
 }
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+.billing-panel-body {
+  display: grid;
+  gap: 16px;
+  padding: 22px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.plan-comparison {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr));
+  gap: 24px;
+}
+.plan-comparison > div {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+}
+.checkout-layout {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
+  gap: 28px;
+}
+.checkout-layout > div {
+  display: grid;
+  align-content: start;
+  gap: 16px;
+  min-width: 0;
+}
+.payment-qr img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 6px;
+}
+.copy-value {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: start;
+  gap: 10px;
+  min-width: 0;
+}
+.copy-value code {
+  flex: 1 1 180px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  user-select: all;
+  font-size: 12px;
+  line-height: 1.7;
+}
+.copy-value .button {
+  flex: 0 0 auto;
+}
+.payment-value > small {
+  display: block;
+  margin-top: 8px;
+}
+.payment-value [role="alert"] {
+  color: var(--red);
+}
+.payment-verification {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: end;
+}
+.payment-verification .field {
+  flex: 1 1 100%;
+}
+.billing-page .table-scroll td {
+  white-space: nowrap;
+}
 table {
   border-collapse: collapse;
   width: 100%;

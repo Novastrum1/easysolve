@@ -1,0 +1,214 @@
+{
+  "navigations": [
+    {
+      "url": "http://localhost:3000/chat",
+      "at": "2026-10-30T17:57:34.341Z"
+    },
+    {
+      "url": "http://localhost:3000/chat",
+      "at": "2026-10-30T17:57:34.648Z"
+    },
+    {
+      "url": "http://localhost:3000/chat",
+      "at": "2026-10-30T17:57:42.875Z"
+    },
+    {
+      "url": "http://localhost:3000/chat",
+      "at": "2026-10-30T17:57:43.007Z"
+    }
+  ],
+  "pageCrashes": [],
+  "at": "2026-10-30T17:57:33.609Z",
+  "browserErrors": [
+    {
+      "name": "TypeError",
+      "message": "i is not a function",
+      "stack": "TypeError: i is not a function\n    at ix (http://localhost:3000/_next/static/chunks/3wbm-994r45kr.js:1:113968)\n    at uC (http://localhost:3000/_next/static/chunks/3wbm-994r45kr.js:1:142491)\n    at uN (http://localhost:3000/_next/static/chunks/3wbm-994r45kr.js:1:142401)\n    at uC (http://localhost:3000/_next/static/chunks/3wbm-994r45kr.js:1:142537)\n    at uN (http://localhost:3000/_next/static/chunks/3wbm-994r45kr.js:1:142401)\n    at uC (http://localhost:3000/_next/static/chunks/3wbm-994r45kr.js:1:142537)\n    at uN (http://localhost:3000/_next/static/chunks/3wbm-994r45kr.js:1:142401)\n    at uC (http://localhost:3000/_next/static/chunks/3wbm-994r45kr.js:1:142537)\n    at uN (http://localhost:3000/_next/static/chunks/3wbm-994r45kr.js:1:142401)\n    at uC (http://localhost:3000/_next/static/chunks/3wbm-994r45kr.js:1:142471)"
+    },
+    {
+      "name": "TypeError",
+      "message": "i is not a function",
+      "stack": "TypeError: i is not a function\n    at ix (http://localhost:3000/_next/static/chunks/3wbm-994r45kr.js:1:113968)\n    at uT (http://localhost:3000/_next/static/chunks/3wbm-994r45kr.js:1:143076)\n    at uN (http://localhost:3000/_next/static/chunks/3wbm-994r45kr.js:1:142339)\n    at uC (http://localhost:3000/_next/static/chunks/3wbm-994r45kr.js:1:142537)\n    at uN (http://localhost:3000/_next/static/chunks/3wbm-994r45kr.js:1:142401)\n    at uC (http://localhost:3000/_next/static/chunks/3wbm-994r45kr.js:1:142471)\n    at uN (http://localhost:3000/_next/static/chunks/3wbm-994r45kr.js:1:142401)\n    at uC (http://localhost:3000/_next/static/chunks/3wbm-994r45kr.js:1:142471)\n    at uN (http://localhost:3000/_next/static/chunks/3wbm-994r45kr.js:1:142401)\n    at uC (http://localhost:3000/_next/static/chunks/3wbm-994r45kr.js:1:142537)"
+    }
+  ],
+  "consoleErrors": [],
+  "failedRequests": [
+    {
+      "url": "http://localhost:3000/overview",
+      "method": "GET",
+      "failure": {
+        "errorText": "net::ERR_ABORTED"
+      }
+    },
+    {
+      "url": "http://localhost:3000/issues",
+      "method": "GET",
+      "failure": {
+        "errorText": "net::ERR_ABORTED"
+      }
+    },
+    {
+      "url": "http://localhost:3000/runs",
+      "method": "GET",
+      "failure": {
+        "errorText": "net::ERR_ABORTED"
+      }
+    },
+    {
+      "url": "http://localhost:3000/discover",
+      "method": "GET",
+      "failure": {
+        "errorText": "net::ERR_ABORTED"
+      }
+    },
+    {
+      "url": "http://localhost:3000/maintain",
+      "method": "GET",
+      "failure": {
+        "errorText": "net::ERR_ABORTED"
+      }
+    },
+    {
+      "url": "http://localhost:3000/assignments",
+      "method": "GET",
+      "failure": {
+        "errorText": "net::ERR_ABORTED"
+      }
+    },
+    {
+      "url": "http://localhost:3000/wave",
+      "method": "GET",
+      "failure": {
+        "errorText": "net::ERR_ABORTED"
+      }
+    },
+    {
+      "url": "http://localhost:3000/reviews",
+      "method": "GET",
+      "failure": {
+        "errorText": "net::ERR_ABORTED"
+      }
+    },
+    {
+      "url": "http://localhost:3000/api/chat",
+      "method": "POST",
+      "failure": {
+        "errorText": "net::ERR_ABORTED"
+      }
+    },
+    {
+      "url": "http://localhost:3000/issues",
+      "method": "GET",
+      "failure": {
+        "errorText": "net::ERR_ABORTED"
+      }
+    },
+    {
+      "url": "http://localhost:3000/runs",
+      "method": "GET",
+      "failure": {
+        "errorText": "net::ERR_ABORTED"
+      }
+    },
+    {
+      "url": "http://localhost:3000/overview",
+      "method": "GET",
+      "failure": {
+        "errorText": "net::ERR_ABORTED"
+      }
+    },
+    {
+      "url": "http://localhost:3000/wave",
+      "method": "GET",
+      "failure": {
+        "errorText": "net::ERR_ABORTED"
+      }
+    },
+    {
+      "url": "http://localhost:3000/maintain",
+      "method": "GET",
+      "failure": {
+        "errorText": "net::ERR_ABORTED"
+      }
+    },
+    {
+      "url": "http://localhost:3000/assignments",
+      "method": "GET",
+      "failure": {
+        "errorText": "net::ERR_ABORTED"
+      }
+    },
+    {
+      "url": "http://localhost:3000/reviews",
+      "method": "GET",
+      "failure": {
+        "errorText": "net::ERR_ABORTED"
+      }
+    }
+  ],
+  "apiResponses": [
+    {
+      "path": "/api/bootstrap",
+      "status": 200
+    },
+    {
+      "path": "/api/chat",
+      "status": 200
+    },
+    {
+      "path": "/api/bootstrap",
+      "status": 200
+    },
+    {
+      "path": "/api/bootstrap",
+      "status": 200
+    }
+  ],
+  "frames": [],
+  "savedMessageShapes": [
+    {
+      "role": "user",
+      "contentType": "string",
+      "activityType": "array",
+      "activityCount": 0
+    },
+    {
+      "role": "assistant",
+      "contentType": "string",
+      "activityType": "array",
+      "activityCount": 0
+    },
+    {
+      "role": "assistant",
+      "contentType": "string",
+      "activityType": "array",
+      "activityCount": 0
+    },
+    {
+      "role": "user",
+      "contentType": "string",
+      "activityType": "array",
+      "activityCount": 0
+    }
+  ],
+  "responseReadError": "response.text: Protocol error (Network.getResponseBody): No data found for resource with given identifier\nResponse body is not available for a response that was navigated away from. Read response.body() before triggering any navigation.",
+  "assistantVisible": 0,
+  "beforeReloadErrorScreen": 1,
+  "reopenedAssistantVisible": 2,
+  "finalUrl": "http://localhost:3000/chat",
+  "errorScreen": 0,
+  "browserApi": {
+    "chromiumVersion": "156.0.8078.4",
+    "nativeScrollIntoViewReturnsPromise": true,
+    "shim": false
+  },
+  "serverEvidence": {
+    "chatHttpStatus": 200,
+    "bootstrapHttpStatus": 200,
+    "persistedUserAndAssistantRows": true,
+    "contentType": "string",
+    "activityType": "array",
+    "chatRuntimeErrorLogs": 0
+  },
+  "diagnosis": "React effect returned the native scrolling Promise as cleanup; React invoked it when saved-message refresh changed the dependency."
+}

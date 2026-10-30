@@ -2,12 +2,9 @@ import { db } from "./db";
 import { hash } from "./security";
 import { providerConfig } from "./providers";
 
-export const isProviderAdmin = (userId: string) =>
-  (process.env.AI_ADMIN_USER_IDS ?? process.env.OPENAI_ADMIN_USER_IDS ?? "")
-    .split(",")
-    .map((v) => v.trim())
-    .filter(Boolean)
-    .includes(userId);
+export const isProviderAdmin = async (userId: string) =>
+  (await db.user.findUnique({ where: { id: userId }, select: { role: true } }))
+    ?.role === "ADMIN";
 
 // Internal only: verification is bound to the exact credential and model.
 export const providerFingerprint = () =>
@@ -31,17 +28,14 @@ export async function providerStatus() {
   return {
     id,
     name,
-    region:
-      "region" in providerConfig()
-        ? (providerConfig() as { region: string }).region
-        : null,
+    region: null,
     connectionFailed:
       !!receipt &&
       receipt.verifiedAt.getTime() === 0 &&
       receipt.fingerprint === providerFingerprint(),
     configured,
     model,
-    modelName: model === "gpt-6-astra" ? "GPT-6 Astra" : model,
+    modelName: model,
     verified,
     verifiedAt: verified ? receipt!.verifiedAt : null,
   };

@@ -1,8 +1,8 @@
-# EasySolve
-
+ther# EasySolve
+p
 **From issue to reviewed pull request.**
 
-A self-hosted GitHub coding-agent application with a Next.js interface, PostgreSQL persistence, a durable worker, Amazon Bedrock ConverseStream and optional AgentRouter/direct OpenAI adapters, and isolated Docker execution. The interface includes contributor and maintainer workflows, original branding, dark/light themes, and responsive navigation. There are no simulated live issues, runs, usage figures, or provider connections.
+A self-hosted GitHub coding-agent application with a Next.js interface, PostgreSQL persistence, a durable worker, the direct DeepSeek Chat Completions API, and isolated Docker execution. The interface includes contributor and maintainer workflows, original branding, dark/light themes, and responsive navigation. There are no simulated live issues, runs, usage figures, or provider connections.
 
 ## Start in Codespaces or locally
 
@@ -16,7 +16,7 @@ npm run start:all
 
 `setup` creates a private `.env` with a random encryption key if it does not exist, starts PostgreSQL, generates Prisma Client, applies migrations, and builds the sandbox image. `start:all` starts both the web app and durable worker. Open port **3000**. The web server binds `0.0.0.0`; PostgreSQL is bound to localhost:5432 only. No Redis is required: the queue uses PostgreSQL row locks, leases, and unique idempotency keys.
 
-Create your account in the application. Connect GitHub in **Account**. Set `AI_PROVIDER=bedrock`, `AWS_BEARER_TOKEN_BEDROCK`, `AWS_REGION` and an exact verified `BEDROCK_MODEL_ID` in the private root `.env`, then restart the app and worker. Direct OpenAI remains optional with `AI_PROVIDER=openai` and a separate `OPENAI_API_KEY`. GitHub workflows work without an AI key. Key presence alone does not verify provider access.
+Create your account in the application. Connect GitHub in **Account**. Enter `DEEPSEEK_API_KEY` privately in the **root `/workspaces/easysolve/.env`**, preserving any existing value. Set `AI_PROVIDER=deepseek`, `DEEPSEEK_BASE_URL=https://api.deepseek.com`, and `DEEPSEEK_MODEL=deepseek-flash`, then restart both web and worker. A nonempty root `.env` key takes precedence over an older injected DeepSeek key in both services. `.env` stays ignored and untracked. No credential belongs in `NEXT_PUBLIC_*`, source code, screenshots, or reports. GitHub workflows work without an AI key. Key presence alone does not verify connectivity.
 
 Owner administration is available at **`/admin`**. Promote only your existing account once with `npm run admin:bootstrap -- --email 'your-existing-email@example.com'` on the trusted server after applying migrations. Signup never grants administrator access. See [owner setup and administration](docs/ADMIN.md) for user controls, plans, job operations, authorization and auditing.
 
@@ -41,7 +41,9 @@ In Codespaces, set `APP_URL=https://<codespace-name>-3000.app.github.dev`. The s
 | `npm run test:browser`     | Desktop and mobile Chromium tests against a running localhost:3000 app        |
 | `npm run db:seed`          | Explicit development account only; requires `SEED_EMAIL` and `SEED_PASSWORD`  |
 
-`npm run ai:verify` makes live requests to the selected provider, consumes provider tokens, and writes a sanitized report to `docs/ai-live-verification.json`. It uses temporary database fixtures for two bounded connection/chat requests; it performs no coding-agent or GitHub actions. Run it only when live provider verification is intended.
+`node scripts/test-isolated.mjs` runs integration tests in a new local database and removes only that disposable database. Add `--browser` to start a temporary production web process and run the browser suite. The application database and services must not be used for billing fixtures.
+
+`npm run ai:verify` makes live requests to the DeepSeek, consumes provider tokens, and writes a sanitized report to `docs/ai-live-verification.json`. It uses temporary database fixtures for bounded connection, chat and tool requests; it performs no coding-agent or GitHub actions. Run it only when live provider verification is intended.
 
 Browser setup: `npx playwright install --with-deps chromium`. Integration/browser tests create uniquely named fixture accounts and remove their own records. Use a local disposable database. Stop standalone worker processes before integration/browser tests: they can otherwise claim test fixture jobs and bypass the test process’s mocked AI/GitHub boundaries. Restart the worker after fixtures are cleaned up. They never call live AI providers or GitHub write APIs. Do not point the test environment at production.
 
@@ -49,24 +51,27 @@ Browser setup: `npx playwright install --with-deps chromium`. Integration/browse
 
 Copy the documented names in [.env.example](.env.example); never commit `.env`.
 
-| Variable                  | Meaning                                                                                                    |
-| ------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| `DATABASE_URL`            | PostgreSQL connection string; production records, sessions, jobs, artifacts, usage                         |
-| `POSTGRES_PASSWORD`       | Local Compose database password; change with `DATABASE_URL` for production                                 |
-| `APP_URL`                 | Exact browser origin, no trailing slash; CSRF and recovery links                                           |
-| `TOKEN_ENCRYPTION_KEY`    | Base64-encoded 32-byte AES-256-GCM key; `openssl rand -base64 32`                                          |
-| `OPENAI_API_KEY`        | Server-only OpenAI API key; never given to the sandbox                                                   |
-| `OPENAI_MODEL`          | Configurable Responses-compatible model, default `gpt-6-astra`; access depends on your OpenAI account |
-| `AI_MAX_OUTPUT_TOKENS`    | Per-request output ceiling, default 6,000                                                                  |
-| `PLAN_NAME`               | Self-hosted plan label, default Personal                                                                   |
-| `PLAN_MAX_JOBS`           | Server-enforced monthly job ceiling per user, default 50                                                   |
-| `PLAN_MAX_TOKENS`         | Server-enforced monthly token ceiling per user, default 1,000,000                                          |
-| `SANDBOX_IMAGE`           | Trusted locally built execution image, default `easysolve-sandbox:local`                                   |
-| `WORKER_CONCURRENCY`      | Global active job ceiling, default 1; launch additional worker processes to use higher ceilings            |
-| `RUN_TIMEOUT_MS`          | Per-attempt execution budget, default 900,000 ms; checked between bounded operations                       |
-| `RECOVERY_WEBHOOK_URL`    | Optional email delivery adapter URL; receives authenticated POST `{email,url}`                             |
-| `RECOVERY_WEBHOOK_SECRET` | Bearer secret for the recovery adapter                                                                     |
-| `COOKIE_SECURE`           | Defaults true for production; false only for local HTTP production-build tests                             |
+| Variable                  | Meaning                                                                                         |
+| ------------------------- | ----------------------------------------------------------------------------------------------- |
+| `DATABASE_URL`            | PostgreSQL connection string; production records, sessions, jobs, artifacts, usage              |
+| `POSTGRES_PASSWORD`       | Local Compose database password; change with `DATABASE_URL` for production                      |
+| `APP_URL`                 | Exact browser origin, no trailing slash; CSRF and recovery links                                |
+| `TOKEN_ENCRYPTION_KEY`    | Base64-encoded 32-byte AES-256-GCM key; `openssl rand -base64 32`                               |
+| `DEEPSEEK_API_KEY`        | Server-only key entered in the private root `.env`; shared by web and worker                    |
+| `DEEPSEEK_MODEL`          | Default `deepseek-flash`; no fallback model                                                     |
+| `DEEPSEEK_BASE_URL`       | Official `https://api.deepseek.com` only (optional `/v1` is accepted)                           |
+| `DEEPSEEK_THINKING`       | `disabled` by default; `enabled` retains private reasoning only in transient tool history       |
+| `DEEPSEEK_TIMEOUT_MS`     | Streaming deadline, default and maximum 90000 ms                                                |
+| `AI_MAX_OUTPUT_TOKENS`    | Per-request output ceiling, default 6,000                                                       |
+| `PLAN_NAME`               | Self-hosted plan label, default Personal                                                        |
+| `PLAN_MAX_JOBS`           | Server-enforced monthly job ceiling per user, default 50                                        |
+| `PLAN_MAX_TOKENS`         | Server-enforced monthly token ceiling per user, default 1,000,000                               |
+| `SANDBOX_IMAGE`           | Trusted locally built execution image, default `easysolve-sandbox:local`                        |
+| `WORKER_CONCURRENCY`      | Global active job ceiling, default 1; launch additional worker processes to use higher ceilings |
+| `RUN_TIMEOUT_MS`          | Per-attempt execution budget, default 900,000 ms; checked between bounded operations            |
+| `RECOVERY_WEBHOOK_URL`    | Optional email delivery adapter URL; receives authenticated POST `{email,url}`                  |
+| `RECOVERY_WEBHOOK_SECRET` | Bearer secret for the recovery adapter                                                          |
+| `COOKIE_SECURE`           | Defaults true for production; false only for local HTTP production-build tests                  |
 
 Price estimates are configured in **Run settings** as dollars per million input/cached/output tokens. They are explicitly estimates, not billing charges. User token allowances have configurable UTC reset days (1–28) and hours in Run settings. Server plan entitlements reset on the first day of each UTC calendar month; changing a user reset cannot bypass that ceiling. User settings may lower plan ceilings but cannot raise server entitlements. Background jobs wait for allowance reset instead of becoming permanently failed.
 
@@ -76,11 +81,19 @@ Use a fine-grained personal access token restricted to relevant repositories, wi
 
 Tokens are validated against `/user`, encrypted with authenticated AES-GCM, and never returned to the browser. Replacing a token for the same login updates its ciphertext. Disconnect deletes it locally; revoke it on GitHub separately. Back up the encryption key independently of the database. Changing the key without a migration makes existing tokens unreadable.
 
-### OpenAI
+### DeepSeek
 
-The official OpenAI SDK targets https://api.openai.com/v1 using streamed Responses requests. Only a final completion receipt with valid usage is accepted as successful; partial stream output is not applied. Chat exposes validated function tools; writing actions require application confirmation. Actual usage is persisted from provider response usage fields, including cached input and reasoning output (reasoning is already included in output and total tokens). Source snippets, issue descriptions, and messages are sent to the configured provider; no GitHub token, database password, or API key is sent as prompt context or exposed inside the sandbox. Configure provider access and data handling for the repositories you use.
+All chat, analysis, planning, coding, review, summary and worker generation uses the same DeepSeek configuration. The OpenAI-compatible SDK is used exclusively with DeepSeek's official Chat Completions endpoint; OpenAI, AgentRouter and Bedrock adapters are removed. Provider errors never select another provider. Historical usage and attribution remain unchanged.
 
-Official references consulted: [OpenAI tools](https://developers.openai.com/api/docs/guides/tools), [Prisma 7](https://www.prisma.io/docs/guides/upgrade-prisma-orm/v7), [GitHub pull requests](https://docs.github.com/en/rest/pulls/pulls). Simplewk’s site could not be fetched in this environment; the supplied product specification was used as the capability reference.
+Chat streams visible answer text, supports cancellation, and returns validated tool results to DeepSeek for up to five steps. Tool arguments are assembled across streamed chunks and validated before use. Thinking mode retains `reasoning_content` for every assistant message in the transient tool conversation, as required by DeepSeek; reasoning is never displayed or persisted as messages. Write tools still produce previews requiring existing approval. Structured JSON is validated locally against the workflow schema.
+
+Account and admin views distinguish not configured, configured but unverified, verified, and connection failed. Only an administrator (`ADMIN` role) may test the connection. Verification follows a successful real request with valid usage, expires after 24 hours, and is bound to endpoint, model and key. Failures revoke verification. Authentication, balance, rate-limit, timeout and upstream errors are sanitized.
+
+Limits remain configurable through `AI_MAX_INPUT_BYTES`, `AI_MAX_OUTPUT_TOKENS`, `AI_REQUESTS_PER_MINUTE`, `AI_GLOBAL_REQUESTS_PER_MINUTE`, `AI_JOB_MAX_TOKENS`, `AI_JOB_MAX_REQUESTS`, and `RUN_TIMEOUT_MS`. SDK retries are disabled; the durable queue retains its bounded retry policy. Usage comes only from actual provider receipts, including cache hits. Missing usage is never estimated as actual consumption.
+
+Prices are optional configurable USD per million tokens: `DEEPSEEK_INPUT_PRICE_PER_MILLION`, `DEEPSEEK_CACHED_PRICE_PER_MILLION`, `DEEPSEEK_OUTPUT_PRICE_PER_MILLION`. Blank means no estimate. Estimates apply only to DeepSeek records. DeepSeek uses separate price settings, so previous providers’ saved prices are never silently reused. [Official pricing](https://api-docs.deepseek.com/quick_start/pricing/) currently varies between peak and off-peak hours; choose the applicable documented rates or a conservative peak estimate and review them when rates change. Per-user Run settings can override estimates; estimates are not payment receipts.
+
+References: [Chat Completions](https://api-docs.deepseek.com/api/create-chat-completion/), [thinking and tool history](https://api-docs.deepseek.com/guides/thinking_mode/), [tool calls](https://api-docs.deepseek.com/guides/tool_calls/).
 
 ## Workflow
 
@@ -95,34 +108,4 @@ Assignments are proposals, with assignability and configured limits checked befo
 
 ## Delivery status
 
-See [feature and verification checklist](docs/FEATURES.md), [architecture](docs/ARCHITECTURE.md), and [deployment and operations](docs/DEPLOYMENT.md). This implementation is operational within documented sandbox and integration limits. It does not include a payment provider, Drips submission automation, or a shared multi-member organization administration system. Live OpenAI, GitHub writes, email delivery, and Drips interactions require operator credentials and have not been live-verified here.
-
-## Optional direct OpenAI / GPT-6 Astra setup
-
-The server defaults to `OPENAI_MODEL=gpt-6-astra` and `OPENAI_REASONING_EFFORT=low`. Astra supports low, medium, high, xhigh and max; none is rejected. There is no model fallback. The default output ceiling is 6,000 tokens including reasoning, with a 90-second streaming deadline and no automatic SDK retries. Incomplete/refused/interrupted output never triggers tools or edits. Jobs retain bounded retries, cancellation checkpoints, offline Docker execution and review before publication.
-
-In Codespaces, put `OPENAI_API_KEY` in a Codespaces secret (preferred) or ignored private `.env`; add `OPENAI_MODEL` if overriding the default. Restart both web and worker after changing secrets. Keep port 3000 private and use the exact forwarded origin for `APP_URL`. No `NEXT_PUBLIC_` credential is used. Existing process environment values take precedence over `.env`.
-
-In production, inject the same variables through the hosting secret manager into both the web service and worker. Apply `npm run db:migrate`, generate Prisma Client and build before restarting both services. The web service needs outbound HTTPS to api.openai.com; the execution container receives no provider credentials. This change adds usage fields and connection/request tables without rewriting historical provider records.
-
-Set `OPENAI_ADMIN_USER_IDS` to comma-separated existing database User IDs for trusted operators. Empty denies all UI connection tests; account signup and profile changes cannot grant this permission. Administrators see **Test OpenAI connection** on Account; other users see only configuration and verification status and never need their own key. The authenticated POST requires the existing same-origin CSRF check and is rate limited. Verification expires after 24 hours, is bound to the configured key/model, and is revoked after failed AI requests. Configuration never implies connection success.
-
-Server limits: `AI_MAX_INPUT_BYTES` (200000), `AI_MAX_OUTPUT_TOKENS` (6000, max 128000), `AI_REQUESTS_PER_MINUTE` (20/user), `AI_GLOBAL_REQUESTS_PER_MINUTE` (60), `AI_JOB_MAX_TOKENS` (500000/run), `AI_JOB_MAX_REQUESTS` (18/run, across retries including rejected/interrupted attempts), `OPENAI_TIMEOUT_MS` (90000, max 90000), and existing `RUN_TIMEOUT_MS` (900000). Requests reserve a conservative input-byte estimate plus output before admission; recorded usage always comes from actual provider receipts. Without a final receipt, token spend is unknown and no tokens are invented. Request admission counts include rejected attempts. Monthly plan/user allowances still apply. Raising budgets should be deliberate.
-
-Optional `OPENAI_INPUT_PRICE_PER_MILLION`, `OPENAI_CACHED_PRICE_PER_MILLION` and `OPENAI_OUTPUT_PRICE_PER_MILLION` supply defaults for user-editable OpenAI estimates. Blank prices mean no estimate; use your actual contract rates. Historical providers remain in usage totals and are excluded from OpenAI price estimates. Reasoning tokens are shown separately but never billed twice in the calculation.
-
-`npm run ai:verify` authorizes two live calls only: a streaming marker response and a persisted ordinary chat response. It records sanitized outcomes in `docs/openai-live-verification.json` and removes its temporary account. Mocked SDK integration tests cover chat tools, matching/drafts, planning, actual worker repair/test execution in Docker, approval gates, budgets and administrator authorization. No live GitHub writes are included.
-
-Current live result (2026-10-29): OpenAI rejected the supplied key (`AI_AUTHENTICATION`). Connection and live chat remain unverified; a valid project API key is required. No substitute model was attempted.
-
-Implementation references: [GPT-6 Astra](https://developers.openai.com/api/docs/models/gpt-6-astra), [streaming Responses](https://developers.openai.com/api/docs/guides/streaming-responses), [function calling](https://developers.openai.com/api/docs/guides/function-calling), [structured outputs](https://developers.openai.com/api/docs/guides/structured-outputs). Coding actions and contribution matching use strict JSON schemas; tool arguments are still validated server-side before any action.
-
-## Amazon Bedrock
-
-See [Bedrock setup and verification](docs/BEDROCK.md). The active provider is Bedrock; credentials remain server-side and no fallback provider is used.
-
-## Optional AgentRouter gateway
-
-See [AgentRouter configuration and verification](docs/AGENTROUTER.md). The optional gateway uses `AI_PROVIDER=agentrouter` with `https://co.agentrouter.org/v1`. `AGENTROUTER_MODEL` has no automatic default or fallback. The requested `gpt-6-astra` must appear in the authenticated gateway catalog before EasySolve will generate with it. The current token received HTTP 401, so no available-model list, Astra access, chat, streaming, tools or schema support has been live-verified. Account credit is not proof of API access.
-
-`npm run agentrouter:verify` queries the authenticated catalog, then tests bounded chat, a harmless owned-issue tool, and a strict JSON schema only if the requested model is listed. It writes sanitized status and actual usage to `docs/agentrouter-live-verification.json`. `npm run ai:verify` tests ordinary chat on the selected provider and writes `docs/ai-live-verification.json`. Both consume tokens when access succeeds; neither performs GitHub writes. Tests use provider mocks. Direct OpenAI prices never estimate AgentRouter charges.
+See [feature and verification checklist](docs/FEATURES.md), [architecture](docs/ARCHITECTURE.md), and [deployment and operations](docs/DEPLOYMENT.md). This implementation is operational within documented sandbox and integration limits. It does not include a payment provider, Drips submission automation, or a shared multi-member organization administration system. Live DeepSeek, GitHub writes, email delivery, and Drips interactions require operator credentials and have not been live-verified here.

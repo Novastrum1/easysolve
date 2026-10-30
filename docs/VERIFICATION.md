@@ -1,3 +1,5 @@
+> Historical record. Provider setup and current runtime statements below are superseded by the [DeepSeek configuration](../README.md#deepseek).
+
 # Local verification record
 
 ## Login form repair — 2026-10-29

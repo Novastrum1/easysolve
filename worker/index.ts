@@ -1,7 +1,7 @@
+import "../lib/load-env";
 import { entitlementSummary } from "../lib/entitlements";
 import { reconcilePayments } from "../lib/billing";
-import "../lib/load-env";
-import { AIProviderError } from "../lib/providers/openai";
+import { AIProviderError } from "../lib/providers/shared";
 import { AllowanceError } from "../lib/ai";
 import { db } from "../lib/db";
 import { syncIssues, syncRepositoryStats } from "../lib/github";

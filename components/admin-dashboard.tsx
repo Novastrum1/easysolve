@@ -83,6 +83,7 @@ type Overview = {
     region?: string | null;
     name?: string;
     model?: string;
+    connectionFailed?: boolean;
     configured: boolean;
     verified: boolean;
     verifiedAt?: string | null;
@@ -343,13 +344,13 @@ export function AdminDashboard({ ownerName }: { ownerName: string }) {
               {overview.provider.region && ` · ${overview.provider.region}`}
             </p>
             <p>
-              {overview.provider.configured
-                ? "Credential configured"
-                : "Setup required"}{" "}
-              ·{" "}
-              {overview.provider.verified
-                ? "Connection verified within 24 hours"
-                : "Connection unverified"}
+              {!overview.provider.configured
+                ? "Not configured"
+                : overview.provider.connectionFailed
+                  ? "Connection failed"
+                  : overview.provider.verified
+                    ? "Verified"
+                    : "Configured but unverified"}
             </p>
             {overview.provider.verifiedAt && (
               <p>Last verified: {date(overview.provider.verifiedAt)}</p>

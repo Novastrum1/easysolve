@@ -6,18 +6,50 @@ import { monthStart } from "../lib/policy";
 const { create } = vi.hoisted(() => ({ create: vi.fn() }));
 vi.mock("openai", () => ({
   default: class {
-    responses = { create };
+    chat = { completions: { create } };
   },
 }));
 vi.mock("next/headers", () => ({ cookies: vi.fn() }));
 function events(response: unknown) {
   return (async function* () {
-    yield { type: "response.completed", response };
+    const r = response as any;
+    yield {
+      model: r.model,
+      choices: [
+        {
+          index: 0,
+          delta:
+            r.output[0].type === "function_call"
+              ? {
+                  tool_calls: [
+                    {
+                      index: 0,
+                      id: "call_1",
+                      type: "function",
+                      function: {
+                        name: r.output[0].name,
+                        arguments: r.output[0].arguments,
+                      },
+                    },
+                  ],
+                }
+              : { content: r.output[0].content[0].text },
+          finish_reason:
+            r.output[0].type === "function_call" ? "tool_calls" : "stop",
+        },
+      ],
+      usage: {
+        prompt_tokens: 20,
+        completion_tokens: 10,
+        total_tokens: 30,
+        prompt_cache_hit_tokens: 5,
+      },
+    };
   })();
 }
 let userId = "";
 beforeAll(async () => {
-  process.env.AI_PROVIDER="openai";
+  process.env.AI_PROVIDER = "deepseek";
   userId = (
     await db.user.create({
       data: {
@@ -28,11 +60,11 @@ beforeAll(async () => {
       },
     })
   ).id;
-  process.env.OPENAI_API_KEY = "test-only-provider-mocked";
+  process.env.DEEPSEEK_API_KEY = "test-only-provider-mocked";
   create.mockImplementation(async () =>
     events({
       status: "completed",
-      model: "gpt-6-astra",
+      model: "deepseek-flash",
       output: [
         {
           type: "message",
@@ -59,7 +91,7 @@ afterAll(async () => {
   });
   await db.rateLimit.deleteMany({ where: { key: `ai:${userId}` } });
   await db.$disconnect();
-  delete process.env.OPENAI_API_KEY;
+  delete process.env.DEEPSEEK_API_KEY;
 });
 it("records actual provider token breakdown and ignores last month at reset", async () => {
   const old = new Date(monthStart().getTime() - 1000);
@@ -115,7 +147,7 @@ it("uses actual Responses function calls for chat actions", async () => {
   create.mockResolvedValueOnce(
     events({
       status: "completed",
-      model: "gpt-6-astra",
+      model: "deepseek-flash",
       output: [{ type: "function_call", name: "check_jobs", arguments: "{}" }],
       usage: {
         input_tokens: 10,
@@ -139,9 +171,14 @@ it("uses actual Responses function calls for chat actions", async () => {
   expect(result.action.type).toBe("check_jobs");
   expect(create).toHaveBeenLastCalledWith(
     expect.objectContaining({
-      tools: chatTools,
+      tools: expect.arrayContaining([
+        expect.objectContaining({
+          type: "function",
+          function: expect.objectContaining({ name: "check_jobs" }),
+        }),
+      ]),
       stream: true,
-      model: "gpt-6-astra",
+      model: "deepseek-flash",
     }),
     expect.objectContaining({ signal: expect.any(AbortSignal) }),
   );

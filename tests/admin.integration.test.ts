@@ -11,7 +11,7 @@ const { create } = vi.hoisted(() => ({ create: vi.fn() }));
 vi.mock("next/headers", () => ({ cookies: vi.fn() }));
 vi.mock("openai", () => ({
   default: class {
-    responses = { create };
+    chat = { completions: { create } };
   },
 }));
 
@@ -50,8 +50,8 @@ async function call(
 }
 beforeAll(async () => {
   vi.stubEnv("APP_URL", origin);
-  vi.stubEnv("AI_PROVIDER", "openai");
-  vi.stubEnv("OPENAI_API_KEY", "admin-test-private-provider-key");
+  vi.stubEnv("AI_PROVIDER", "deepseek");
+  vi.stubEnv("DEEPSEEK_API_KEY", "admin-test-private-provider-key");
   vi.mocked(cookies).mockImplementation(
     async () =>
       ({

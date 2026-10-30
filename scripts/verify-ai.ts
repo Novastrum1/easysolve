@@ -3,7 +3,7 @@ import { writeFile } from "node:fs/promises";
 import { db } from "../lib/db";
 import { ai } from "../lib/ai";
 import { chat } from "../lib/chat";
-import { AIProviderError } from "../lib/providers/openai";
+import { AIProviderError } from "../lib/providers/shared";
 import { providerConfig } from "../lib/providers";
 const config = providerConfig();
 const report: {
@@ -16,7 +16,7 @@ const report: {
 } = {
   provider: config.id,
   model: config.model,
-  region: "region" in config ? config.region : undefined,
+
   at: new Date().toISOString(),
   workflows: [],
   usage: [],
@@ -33,7 +33,7 @@ try {
   userId = (
     await db.user.create({
       data: {
-        email: `openai-verification-${crypto.randomUUID()}@example.test`,
+        email: `deepseek-verification-${crypto.randomUUID()}@example.test`,
         name: "Temporary connection fixture",
         password: "no-login-fixture",
       },

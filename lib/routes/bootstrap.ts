@@ -118,7 +118,7 @@ export async function handleBootstrap({
         name: u.name,
         email: u.email,
         role: u.role,
-        providerAdmin: isProviderAdmin(u.id),
+        providerAdmin: await isProviderAdmin(u.id),
       },
       identities,
       repositories,

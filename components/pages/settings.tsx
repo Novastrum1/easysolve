@@ -178,10 +178,10 @@ export function UsagePage(c: Context) {
   const cost = u.reduce(
     (n: number, v: any) =>
       n +
-      (v.provider === "openai"
-        ? ((v.input - v.cached) * config.inputPrice +
-            v.cached * config.cachedPrice +
-            v.output * config.outputPrice) /
+      (v.provider === "deepseek"
+        ? ((v.input - v.cached) * config.deepseekInputPrice +
+            v.cached * config.deepseekCachedPrice +
+            v.output * config.deepseekOutputPrice) /
           1000000
         : 0),
     0,
@@ -271,16 +271,16 @@ export function UsagePage(c: Context) {
               <strong>{u.length}</strong>
             </div>
             <div>
-              <span>Direct OpenAI estimate</span>
+              <span>DeepSeek estimate</span>
               <strong>
-                {config.inputPrice || config.outputPrice
+                {config.deepseekInputPrice || config.deepseekOutputPrice
                   ? `$${cost.toFixed(4)}`
                   : "Pricing not configured"}
               </strong>
             </div>
             <small>
-              Estimate covers OpenAI records only at your configured prices per
-              million tokens; it is not an invoice.
+              Estimate covers DeepSeek records only at your configured prices
+              per million tokens; it is not an invoice.
             </small>
           </div>
         </Panel>
@@ -448,9 +448,9 @@ export function SettingsPage(c: Context) {
               ["monthlyJobs", "Monthly jobs", 1],
               ["resetDay", "Allowance reset day (UTC, 1–28)", 1],
               ["resetHour", "Allowance reset hour (UTC, 0–23)", 0],
-              ["inputPrice", "Input / 1M tokens ($)", 0],
-              ["cachedPrice", "Cached / 1M tokens ($)", 0],
-              ["outputPrice", "Output / 1M tokens ($)", 0],
+              ["deepseekInputPrice", "Input / 1M tokens ($)", 0],
+              ["deepseekCachedPrice", "Cached / 1M tokens ($)", 0],
+              ["deepseekOutputPrice", "Output / 1M tokens ($)", 0],
             ].map(([key, title, min]) => (
               <Field key={key} label={String(title)}>
                 <input

@@ -130,3 +130,20 @@ it("supports configured UTC allowance resets across months and years", async () 
     reset: new Date("2026-02-15T09:00:00Z"),
   });
 });
+
+it("does not reuse historical provider price settings for DeepSeek estimates", () => {
+  const value = settings({
+    inputPrice: 100,
+    cachedPrice: 50,
+    outputPrice: 200,
+  });
+  expect(value.deepseekInputPrice).toBe(
+    Number(process.env.DEEPSEEK_INPUT_PRICE_PER_MILLION) || 0,
+  );
+  expect(value.deepseekCachedPrice).toBe(
+    Number(process.env.DEEPSEEK_CACHED_PRICE_PER_MILLION) || 0,
+  );
+  expect(value.deepseekOutputPrice).toBe(
+    Number(process.env.DEEPSEEK_OUTPUT_PRICE_PER_MILLION) || 0,
+  );
+});

@@ -33,7 +33,7 @@ try {
     await sandbox.op({
       type: "test",
       command:
-        "node -e \"for(const k of ['DATABASE_URL','TOKEN_ENCRYPTION_KEY','VERCEL_OIDC_TOKEN','OPENAI_API_KEY','AWS_BEARER_TOKEN_BEDROCK'])if(process.env[k])process.exit(1)\"",
+        "node -e \"for(const k of ['DATABASE_URL','TOKEN_ENCRYPTION_KEY','VERCEL_OIDC_TOKEN','DEEPSEEK_API_KEY'])if(process.env[k])process.exit(1)\"",
     }),
   );
   if (credentials.exitCode !== 0)

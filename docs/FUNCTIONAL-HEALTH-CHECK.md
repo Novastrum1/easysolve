@@ -1,3 +1,5 @@
+> Historical record. Provider setup and current runtime statements below are superseded by the [DeepSeek configuration](../README.md#deepseek).
+
 # EasySolve functional health check
 
 Checked October 29, 2026 while Amazon Bedrock MiniMax inference is blocked by the AWS daily token quota. This check made no live AI requests and no GitHub writes.

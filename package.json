@@ -21,12 +21,9 @@
     "doctor": "tsx scripts/doctor.ts",
     "format": "prettier --write app components lib worker tests scripts docs README.md",
     "ai:verify": "tsx scripts/verify-ai.ts",
-    "agentrouter:verify": "tsx scripts/verify-agentrouter.ts",
-    "bedrock:models": "tsx scripts/bedrock-models.ts",
     "billing:enable-mainnet": "tsx scripts/enable-live-checkout.ts"
   },
   "dependencies": {
-    "@aws-sdk/client-bedrock-runtime": "^3.1160.0",
     "@next/env": "^16.4.3",
     "@prisma/adapter-pg": "^7.10.1",
     "@prisma/client": "^7.10.1",

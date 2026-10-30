@@ -9,6 +9,17 @@ test.afterAll(async () => {
 test("signup, every workspace screen, persistence, responsive navigation and logout", async ({
   page,
 }, info) => {
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  page.on("console", (message) => {
+    if (
+      message.type() === "error" &&
+      /hydration|eval\(\) is not supported|violates.*Content.Security.Policy/i.test(
+        message.text(),
+      )
+    )
+      errors.push(message.text());
+  });
   const email = `browser-${crypto.randomUUID()}@example.test`;
   emails.push(email);
   await page.goto("/");
@@ -59,15 +70,13 @@ test("signup, every workspace screen, persistence, responsive navigation and log
     if (name === "Account") {
       await expect(
         page.getByText(
-          process.env.AI_PROVIDER === "bedrock"
-            ? `Amazon Bedrock · ${process.env.BEDROCK_MODEL_ID} · ${process.env.AWS_REGION}`
-            : `${process.env.AI_PROVIDER === "agentrouter" ? "AgentRouter" : "OpenAI"} · GPT-6 Astra`,
+          `DeepSeek · ${process.env.DEEPSEEK_MODEL || "deepseek-flash"}`,
           { exact: true },
         ),
       ).toBeVisible();
       await expect(
         page.getByRole("button", {
-          name: /Test (Amazon Bedrock|OpenAI|AgentRouter) connection/,
+          name: /Test DeepSeek connection/,
         }),
       ).toHaveCount(0);
       await expect(page.getByText("DeepSeek", { exact: true })).toHaveCount(0);
@@ -91,6 +100,7 @@ test("signup, every workspace screen, persistence, responsive navigation and log
   await expect(
     page.getByRole("heading", { name: "Welcome to EasySolve." }),
   ).toBeVisible();
+  expect(errors).toEqual([]);
 });
 test("authentication, CSRF and cross-user resource isolation", async ({
   browser,

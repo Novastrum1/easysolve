@@ -1,0 +1,31 @@
+{
+  "target": "production",
+  "status": "READY",
+  "framework": "Next.js",
+  "url": "https://easysolve-xi.vercel.app",
+  "deploymentUrl": "https://easysolve-eowcptk8n-novastrum.vercel.app",
+  "deploymentId": "dpl_J8i8pLySdWdGX6kWcCjJQQyFBMJe",
+  "project": "novastrum/easysolve",
+  "baseCommit": "2e62624",
+  "source": "current working tree including preserved uncommitted changes",
+  "provider": "deepseek",
+  "model": "deepseek-flash",
+  "checks": {
+    "remoteBuild": "passed",
+    "remoteTypecheck": "passed",
+    "publicHealth": "passed",
+    "productionDatabase": "reachable",
+    "browserUserSignInForm": "passed",
+    "browserAdminSignInForm": "passed",
+    "browserPageErrors": 0,
+    "worker": "ready",
+    "workerReadyInstances": 1,
+    "workerDesiredInstances": 1,
+    "workerDeploymentMatches": true,
+    "workerStartupLog": "online; DeepSeek configuration confirmed"
+  },
+  "runtimeLogReview": "No application failure found. PostgreSQL emitted a forward-looking SSL mode compatibility warning; existing database configuration was preserved.",
+  "databaseAction": "No database records, schema, connection, encryption key, or billing configuration changed.",
+  "aiVerification": "Live production browser tool/code-block response, persistence, navigation and reload passed with no browser exceptions.",
+  "release": "Chat Promise-cleanup crash fix"
+}

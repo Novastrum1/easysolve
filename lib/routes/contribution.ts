@@ -7,7 +7,7 @@ import { chat, chatAction } from "../chat";
 import { db } from "../db";
 import { github } from "../github";
 import { repoName } from "../policy";
-import { HttpError } from "../security";
+import { HttpError, publicError } from "../security";
 import { prepareWave, waveSchema } from "../wave";
 import type { RouteContext } from "./types";
 const id = z.string().min(1).max(100);
@@ -39,16 +39,68 @@ export async function handleContribution({
   }
   if (route === "assignments/apply")
     return json(await applyProposal(u.id, id.parse(body.proposalId)));
-  if (route === "chat")
-    return json(
-      await chat(
-        u.id,
-        z.string().min(1).max(10000).parse(body.text),
-        body.identityId,
-        body.conversation ? id.parse(body.conversation) : "default",
-        body.requestId ? id.parse(body.requestId) : undefined,
-      ),
+  if (route === "chat") {
+    const text = z.string().min(1).max(10000).parse(body.text);
+    const conversation = body.conversation
+      ? id.parse(body.conversation)
+      : "default";
+    const requestId = body.requestId ? id.parse(body.requestId) : undefined;
+    if (!request.headers.get("accept")?.includes("application/x-ndjson"))
+      return json(
+        await chat(
+          u.id,
+          text,
+          body.identityId,
+          conversation,
+          requestId,
+          request.signal,
+        ),
+      );
+    const controller = new AbortController();
+    const signal = AbortSignal.any([request.signal, controller.signal]);
+    const encoder = new TextEncoder();
+    let closed = false;
+    return new Response(
+      new ReadableStream({
+        start(stream) {
+          const send = (value: unknown) => {
+            if (!closed)
+              stream.enqueue(encoder.encode(JSON.stringify(value) + "\n"));
+          };
+          void chat(
+            u.id,
+            text,
+            body.identityId,
+            conversation,
+            requestId,
+            signal,
+            (text) => send({ type: "text", text }),
+          )
+            .then((message) => send({ type: "complete", message }))
+            .catch((error) =>
+              send({ type: "error", error: publicError(error).error }),
+            )
+            .finally(() => {
+              if (!closed) {
+                closed = true;
+                stream.close();
+              }
+            });
+        },
+        cancel() {
+          closed = true;
+          controller.abort();
+        },
+      }),
+      {
+        headers: {
+          "Content-Type": "application/x-ndjson",
+          "Cache-Control": "no-store",
+          "X-Accel-Buffering": "no",
+        },
+      },
     );
+  }
   if (route === "chat/confirm")
     return json(
       await chatAction(

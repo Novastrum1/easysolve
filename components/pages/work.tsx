@@ -38,19 +38,28 @@ import type { Context } from "../workspace";
 import { Identity, PageHead } from "../workspace";
 export function ChatPage(c: Context) {
   const [conversation, setConversation] = useState("default");
-  const messages = c.data.messages.filter(
-    (m: any) => m.conversation === conversation,
-  );
+  const [localMessages, setLocalMessages] = useState<any[]>([]);
+  const messages = [
+    ...c.data.messages,
+    ...localMessages.filter(
+      (message) =>
+        !c.data.messages.some((saved: any) => saved.id === message.id),
+    ),
+  ].filter((m: any) => m.conversation === conversation);
   const [text, setText] = useState(""),
     [busy, setBusy] = useState(false),
+    [streamText, setStreamText] = useState(""),
+    [chatError, setChatError] = useState(""),
     [dictating, setDictating] = useState(false),
     [voiceError, setVoiceError] = useState("");
   const end = useRef<HTMLDivElement>(null);
   const recognition = useRef<any>(null);
-  useEffect(
-    () => end.current?.scrollIntoView({ behavior: "smooth" }),
-    [c.data.messages.length],
-  );
+  const abort = useRef<AbortController | null>(null);
+  useEffect(() => () => abort.current?.abort(), []);
+  useEffect(() => {
+    // Modern browsers return a Promise. Effects may return only cleanup functions.
+    void end.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages.length, streamText, conversation]);
   const pending = useRef<{
     text: string;
     id: string;
@@ -66,19 +75,51 @@ export function ChatPage(c: Context) {
         : crypto.randomUUID());
     pending.current = { text: prompt, id: requestId, conversation };
     setBusy(true);
+    setLocalMessages((current) =>
+      current.some((message) => message.id === requestId)
+        ? current
+        : [
+            ...current,
+            {
+              id: requestId,
+              conversation,
+              role: "user",
+              content: prompt,
+              activity: [],
+              createdAt: new Date().toISOString(),
+            },
+          ],
+    );
     setText("");
+    setStreamText("");
+    setChatError("");
+    abort.current = new AbortController();
     try {
-      await c.act("chat", {
-        text: prompt,
-        requestId,
-        identityId: c.identity,
-        conversation,
-      });
+      const message = await request(
+        "chat",
+        {
+          text: prompt,
+          requestId,
+          identityId: c.identity,
+          conversation,
+        },
+        undefined,
+        (delta) => setStreamText((value) => value + delta),
+        abort.current.signal,
+      );
+      setLocalMessages((current) => [
+        ...current.filter((saved) => saved.id !== message.id),
+        message,
+      ]);
       pending.current = null;
-    } catch {
+      await c.refresh();
+    } catch (error) {
+      setChatError((error as Error).message);
       await c.refresh();
       setText(prompt);
     } finally {
+      setStreamText("");
+      abort.current = null;
       setBusy(false);
     }
   };
@@ -122,7 +163,11 @@ export function ChatPage(c: Context) {
             <Identity {...c} />
             <Button
               variant="secondary"
-              onClick={() => setConversation(crypto.randomUUID())}
+              disabled={busy}
+              onClick={() => {
+                setConversation(crypto.randomUUID());
+                setChatError("");
+              }}
             >
               <Plus size={15} />
               New chat
@@ -134,13 +179,18 @@ export function ChatPage(c: Context) {
         <Select
           aria-label="Conversation"
           value={conversation}
-          onChange={(e) => setConversation(e.target.value)}
+          disabled={busy}
+          onChange={(e) => {
+            setConversation(e.target.value);
+            setChatError("");
+          }}
         >
           {[
             ...new Set<string>([
               "default",
               conversation,
               ...c.data.messages.map((m: any) => m.conversation),
+              ...localMessages.map((message) => message.conversation),
             ]),
           ].map((id) => (
             <option key={id} value={id}>
@@ -253,15 +303,20 @@ export function ChatPage(c: Context) {
                 </div>
               </article>
             ))}
-            {busy && (
-              <div className="thinking">
-                <LoaderCircle size={16} className="spin" />
-                Inspecting your workspace…
-              </div>
-            )}
-            <div ref={end} />
           </div>
         )}
+        {busy && (
+          <div
+            className="thinking"
+            role="status"
+            aria-live="polite"
+            style={{ whiteSpace: "pre-wrap" }}
+          >
+            <LoaderCircle size={16} className="spin" />
+            {streamText || "DeepSeek is inspecting your workspace…"}
+          </div>
+        )}
+        <div ref={end} />
       </div>
       <div className="composer">
         <textarea
@@ -289,8 +344,8 @@ export function ChatPage(c: Context) {
               : c.data.health.provider.verified
                 ? `${c.data.health.provider.name} verified`
                 : c.data.health.ai
-                  ? `${c.data.health.provider.name} configured`
-                  : `${c.data.health.provider.name} setup required`}
+                  ? `${c.data.health.provider.name} configured but unverified`
+                  : `${c.data.health.provider.name} not configured`}
           </span>
           <div>
             <button
@@ -301,6 +356,15 @@ export function ChatPage(c: Context) {
             >
               <Mic size={18} />
             </button>
+            {busy && (
+              <Button
+                variant="secondary"
+                onClick={() => abort.current?.abort()}
+                aria-label="Stop response"
+              >
+                Stop
+              </Button>
+            )}
             <Button
               busy={busy}
               disabled={!text.trim() || !c.data.health.ai}
@@ -311,6 +375,23 @@ export function ChatPage(c: Context) {
             </Button>
           </div>
         </div>
+        {chatError && (
+          <div role="alert" className="inline-error">
+            <p>{chatError}</p>
+            {pending.current?.conversation === conversation && (
+              <Button
+                variant="secondary"
+                disabled={busy}
+                onClick={() => {
+                  const retry = pending.current;
+                  if (retry) void send(retry.text, retry.id);
+                }}
+              >
+                Retry message
+              </Button>
+            )}
+          </div>
+        )}
         {voiceError && <p className="inline-error">{voiceError}</p>}
       </div>
       <div className="composer-note">

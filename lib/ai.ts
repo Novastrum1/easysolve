@@ -1,6 +1,10 @@
 import { providerConfig, generateAI } from "./providers";
 import type OpenAI from "openai";
-import { limit, type OutputFormat } from "./providers/openai";
+import {
+  limit,
+  type DeepSeekMessage,
+  type OutputFormat,
+} from "./providers/shared";
 import { db } from "./db";
 import {
   allowanceWindow,
@@ -19,6 +23,12 @@ export class AllowanceError extends Error {
     super(message);
   }
 }
+export type AIConversation = {
+  messages: DeepSeekMessage[];
+  calls: { id: string; name: string; arguments: string }[];
+  signal?: AbortSignal;
+  onText?: (text: string) => void;
+};
 export async function ai(
   userId: string,
   purpose: string,
@@ -27,7 +37,9 @@ export async function ai(
   runId?: string,
   tools?: OpenAI.Responses.Tool[],
   format?: OutputFormat,
+  conversation?: AIConversation,
 ) {
+  conversation?.signal?.throwIfAborted();
   const provider = providerConfig();
   if (!provider.configured)
     throw new HttpError(
@@ -55,7 +67,13 @@ export async function ai(
         const max = limit("AI_MAX_OUTPUT_TOKENS", 6000, 128000);
         const reserve =
           Buffer.byteLength(
-            input + instructions + JSON.stringify([tools ?? [], format ?? {}]),
+            input +
+              instructions +
+              JSON.stringify([
+                tools ?? [],
+                format ?? {},
+                conversation?.messages ?? [],
+              ]),
             "utf8",
           ) +
           512 +
@@ -72,7 +90,13 @@ export async function ai(
           );
         if (
           Buffer.byteLength(
-            input + instructions + JSON.stringify([tools ?? [], format ?? {}]),
+            input +
+              instructions +
+              JSON.stringify([
+                tools ?? [],
+                format ?? {},
+                conversation?.messages ?? [],
+              ]),
           ) > limit("AI_MAX_INPUT_BYTES", 200000)
         )
           throw new HttpError(
@@ -104,6 +128,9 @@ export async function ai(
           maxTokens: max,
           tools,
           format,
+          history: conversation?.messages,
+          signal: conversation?.signal,
+          onText: conversation?.onText,
         });
         const model = response.model;
         const usageData = response.usage;
@@ -176,6 +203,7 @@ export async function ai(
       throw error;
     });
   if (result.failure) throw result.failure;
+  if (conversation) conversation.calls = result.calls;
   if (result.calls.length > 1) {
     return JSON.stringify({
       answer: "",

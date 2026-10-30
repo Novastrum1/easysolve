@@ -24,6 +24,9 @@ jobs:
     env:
       DATABASE_URL: postgresql://easysolve:ci-disposable-password@localhost:5432/easysolve
       APP_URL: http://localhost:3000
+      AI_PROVIDER: deepseek
+      # Browser AI responses are intercepted; never use a real provider key in CI.
+      DEEPSEEK_API_KEY: ci-mocked-provider-key
       NEXT_TELEMETRY_DISABLED: "1"
     steps:
       - uses: actions/checkout@v4

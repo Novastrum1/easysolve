@@ -16,7 +16,7 @@ export async function recordProviderRuntime(service: "web" | "worker") {
     region: "region" in config ? config.region : null,
     model: config.model,
     endpoint: config.baseURL,
-    bearerPresent: config.id === "bedrock" && !!config.key,
+    bearerPresent: !!config.key,
   };
   // Digest is kept in a private local receipt, never in browser responses or logs.
   await writeFile(

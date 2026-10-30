@@ -95,7 +95,9 @@ async function login(page: any, who: string) {
 }
 test("billing and checkout show exact testnet invoice, locally decoded QR, and pending hash verification", async ({
   page,
-}) => {
+}, info) => {
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
   await login(page, email);
   await page.goto("/billing");
   await expect(
@@ -112,7 +114,16 @@ test("billing and checkout show exact testnet invoice, locally decoded QR, and p
       exact: true,
     }),
   ).toBeVisible();
+  const history = page.getByRole("region", {
+    name: "Invoice and payment history",
+  });
+  await expect(history).toHaveCSS("overflow-x", "auto");
+  await page.screenshot({
+    path: `test-results/billing-${info.project.name}.png`,
+    fullPage: true,
+  });
   await page.goto(`/checkout?invoice=${invoiceId}`);
+  await expect(page.locator(".breadcrumbs")).toContainText("Plans & billing");
   await expect(
     page.getByRole("heading", { name: "Stellar network — USDC" }),
   ).toBeVisible();
@@ -140,9 +151,65 @@ test("billing and checkout show exact testnet invoice, locally decoded QR, and p
   await expect(
     page.getByRole("button", { name: "Copy memo", exact: true }),
   ).toBeVisible();
+  await page.evaluate(() => {
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText: () => Promise.reject(new Error("Clipboard denied")) },
+    });
+  });
+  await page
+    .getByRole("button", { name: "Copy receiving address", exact: true })
+    .click();
+  await expect(
+    page.getByRole("alert").filter({ hasText: "Could not copy" }),
+  ).toBeVisible();
+  await page.evaluate(() => {
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText: () => Promise.resolve() },
+    });
+  });
+  await page
+    .getByRole("button", { name: "Copy receiving address", exact: true })
+    .click();
+  await expect(
+    page.getByRole("status").filter({ hasText: "receiving address copied." }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("alert").filter({ hasText: "Could not copy" }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole("region", { name: "Invoice and payment history" }),
+  ).toHaveCSS("overflow-x", "auto");
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth + 1,
+    ),
+  ).toBe(true);
+  await page.screenshot({
+    path: `test-results/checkout-${info.project.name}.png`,
+    fullPage: true,
+  });
+  let submits = 0;
+  page.on("request", (r) => {
+    if (
+      r.method() === "POST" &&
+      r.url().endsWith(`/invoices/${invoiceId}/submit`)
+    )
+      submits++;
+  });
   await page
     .getByLabel("Transaction hash", { exact: true })
     .fill("a".repeat(64));
+  await Promise.all([
+    page.waitForResponse(
+      (r) =>
+        r.request().method() === "GET" &&
+        r.url().endsWith(`/invoices/${invoiceId}`),
+    ),
+    page.getByRole("button", { name: "Refresh status", exact: true }).click(),
+  ]);
+  expect(submits).toBe(0);
   await page.getByRole("button", { name: "Submit for verification" }).click();
   await expect(
     page.getByText(/Transaction queued for independent verification/),
@@ -151,6 +218,35 @@ test("billing and checkout show exact testnet invoice, locally decoded QR, and p
   expect(
     (await db.user.findUniqueOrThrow({ where: { id: userId } })).membershipPlan,
   ).toBe("basic");
+  expect(submits).toBe(1);
+  expect(errors).toEqual([]);
+});
+test("billing can recover from a failed load without leaving a stale error", async ({
+  page,
+}) => {
+  await login(page, email);
+  let unavailable = true;
+  await page.route("**/api/billing", (route) => {
+    if (unavailable) {
+      return route.fulfill({
+        status: 503,
+        json: { error: "Billing temporarily unavailable" },
+      });
+    }
+    return route.continue();
+  });
+  await page.goto("/billing");
+  await expect(
+    page.getByText("Billing temporarily unavailable", { exact: true }),
+  ).toBeVisible();
+  unavailable = false;
+  await page.getByRole("button", { name: "Retry loading billing" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Your current plan", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByText("Billing temporarily unavailable", { exact: true }),
+  ).toHaveCount(0);
 });
 test("owner manages audited Pro grants and overrides without fabricating payments", async ({
   page,

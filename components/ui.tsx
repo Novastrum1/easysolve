@@ -131,21 +131,24 @@ export function Modal({
   onClose: () => void;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
+  const titleId = useId();
   useEffect(() => {
     ref.current?.showModal();
   }, []);
   return (
     <dialog
       ref={ref}
+      aria-labelledby={titleId}
       onCancel={onClose}
       onClick={(e) => {
         if (e.target === ref.current) onClose();
       }}
     >
       <div className="modal-head">
-        <h2>{title}</h2>
+        <h2 id={titleId}>{title}</h2>
         <button
           className="icon-button"
+          type="button"
           aria-label="Close dialog"
           title="Close"
           onClick={onClose}
@@ -207,19 +210,135 @@ export class RequestError extends Error {
   constructor(
     message: string,
     public fieldErrors?: Record<string, string>,
+    public status = 0,
   ) {
     super(message);
   }
 }
-export async function request(path: string, body?: unknown, method?: string) {
-  const r = await fetch(`/api/${path}`, {
-    method: method ?? (body ? "POST" : "GET"),
-    headers: body ? { "Content-Type": "application/json" } : {},
-    body: body ? JSON.stringify(body) : undefined,
-  });
-  const data = await r.json();
+export async function request(
+  path: string,
+  body?: unknown,
+  method?: string,
+  onText?: (text: string) => void,
+  signal?: AbortSignal,
+) {
+  let r: Response;
+  try {
+    r = await fetch(`/api/${path}`, {
+      method: method ?? (body ? "POST" : "GET"),
+      headers: {
+        ...(body ? { "Content-Type": "application/json" } : {}),
+        ...(onText ? { Accept: "application/x-ndjson" } : {}),
+      },
+      signal,
+      body: body ? JSON.stringify(body) : undefined,
+    });
+  } catch {
+    throw new RequestError(
+      "Unable to connect. Check your connection and try again.",
+    );
+  }
+  if (
+    r.ok &&
+    onText &&
+    r.headers.get("content-type")?.includes("application/x-ndjson")
+  ) {
+    const reader = r.body!.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "",
+      completed: any;
+    const consume = (line: string) => {
+      if (!line.trim()) return;
+      const event = JSON.parse(line);
+      if (!event || typeof event !== "object")
+        throw new RequestError(
+          "Chat returned an invalid stream event. Retry this message.",
+        );
+      if (event.type === "error")
+        throw new RequestError(
+          typeof event.error === "string"
+            ? event.error
+            : "Chat failed. Retry this message.",
+        );
+      if (event.type === "text") {
+        if (typeof event.text !== "string")
+          throw new RequestError(
+            "Chat returned invalid text. Retry this message.",
+          );
+        if (event.text) onText(event.text);
+      } else if (event.type === "complete") {
+        const message = event.message;
+        if (
+          !message ||
+          typeof message.id !== "string" ||
+          message.role !== "assistant" ||
+          typeof message.conversation !== "string" ||
+          typeof message.content !== "string" ||
+          typeof message.createdAt !== "string" ||
+          !Array.isArray(message.activity) ||
+          !message.activity.every(
+            (activity: unknown) =>
+              activity !== null &&
+              typeof activity === "object" &&
+              typeof (activity as { label?: unknown }).label === "string",
+          )
+        ) {
+          throw new RequestError(
+            "Chat returned an invalid saved message. Retry this message.",
+          );
+        }
+        completed = message;
+      } else
+        throw new RequestError(
+          "Chat returned an unsupported stream event. Retry this message.",
+        );
+    };
+    try {
+      while (true) {
+        const { value, done } = await reader.read();
+        buffer += decoder.decode(value, { stream: !done });
+        let newline: number;
+        while ((newline = buffer.indexOf("\n")) >= 0) {
+          const line = buffer.slice(0, newline);
+          buffer = buffer.slice(newline + 1);
+          consume(line);
+        }
+        if (done) break;
+      }
+      consume(buffer);
+      if (!completed)
+        throw new RequestError("Chat stream interrupted. Retry this message.");
+      return completed;
+    } catch (error) {
+      if (error instanceof RequestError) throw error;
+      const failure = new RequestError(
+        signal?.aborted
+          ? "Response stopped. Retry this message."
+          : "Chat stream interrupted. Retry this message.",
+      );
+      failure.cause = error;
+      throw failure;
+    } finally {
+      await reader.cancel().catch(() => {});
+      reader.releaseLock();
+    }
+  }
+  let data;
+  try {
+    data = await r.json();
+  } catch {
+    throw new RequestError(
+      "The server could not complete the request. Please try again.",
+      undefined,
+      r.status,
+    );
+  }
   if (!r.ok)
-    throw new RequestError(data.error || "Request failed", data.fieldErrors);
+    throw new RequestError(
+      data?.error || "Request failed. Please try again.",
+      data?.fieldErrors,
+      r.status,
+    );
   return data;
 }
 export function Diff({ value }: { value: string }) {

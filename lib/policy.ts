@@ -1,5 +1,9 @@
 import { z } from "zod";
-export function planLimits(u: { planName?: string | null; planMaxJobs?: number | null; planMaxTokens?: number | null }) {
+export function planLimits(u: {
+  planName?: string | null;
+  planMaxJobs?: number | null;
+  planMaxTokens?: number | null;
+}) {
   return {
     name: u.planName ?? (process.env.PLAN_NAME || "Personal"),
     jobs: u.planMaxJobs ?? Number(process.env.PLAN_MAX_JOBS || 50),
@@ -14,18 +18,18 @@ export const settingsSchema = z.object({
   resetDay: z.number().int().min(1).max(28).default(1),
   resetHour: z.number().int().min(0).max(23).default(0),
   monthlyJobs: z.number().int().min(1).max(10000).default(50),
-  inputPrice: z
+  deepseekInputPrice: z
     .number()
     .min(0)
-    .default(Number(process.env.OPENAI_INPUT_PRICE_PER_MILLION) || 0),
-  cachedPrice: z
+    .default(Number(process.env.DEEPSEEK_INPUT_PRICE_PER_MILLION) || 0),
+  deepseekCachedPrice: z
     .number()
     .min(0)
-    .default(Number(process.env.OPENAI_CACHED_PRICE_PER_MILLION) || 0),
-  outputPrice: z
+    .default(Number(process.env.DEEPSEEK_CACHED_PRICE_PER_MILLION) || 0),
+  deepseekOutputPrice: z
     .number()
     .min(0)
-    .default(Number(process.env.OPENAI_OUTPUT_PRICE_PER_MILLION) || 0),
+    .default(Number(process.env.DEEPSEEK_OUTPUT_PRICE_PER_MILLION) || 0),
 });
 export const settings = (v: unknown) => settingsSchema.parse(v ?? {});
 export function repoName(value: string) {

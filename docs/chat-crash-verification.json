@@ -1,0 +1,68 @@
+{
+  "rootCause": "Promise returned by scrollIntoView was implicitly returned from a React effect and invoked as cleanup on conversation refresh/unmount",
+  "originalError": "TypeError: i is not a function",
+  "reproducedBeforeFix": true,
+  "regressionFailedBeforeFix": true,
+  "checks": {
+    "unitTests": 66,
+    "integrationTests": 58,
+    "distinctBrowserCasesPassedAcrossRuns": 36,
+    "typecheck": "passed",
+    "localProductionBuild": "passed",
+    "remoteProductionBuild": "passed"
+  },
+  "browserRunDetails": "Full suite: 32 passed, 4 failures in test selectors, mobile navigation waits and a provider-status expectation. Focused rerun: 5 passed, 1 mobile navigation wait failed. Final single mobile regression: passed. No remaining browser case failed after the test corrections.",
+  "liveProduction": {
+    "at": "2026-10-30T18:13:21.741Z",
+    "target": "production",
+    "errors": [],
+    "status": "verified",
+    "scrollReturnsPromise": true,
+    "streamStatus": 200,
+    "savedCodeBlock": true,
+    "readOnlyTool": true,
+    "messageCount": 4,
+    "reopened": true,
+    "errorScreen": 0,
+    "usage": [
+      {
+        "provider": "deepseek",
+        "model": "deepseek-flash",
+        "input": 1098,
+        "output": 22,
+        "total": 1120
+      },
+      {
+        "provider": "deepseek",
+        "model": "deepseek-flash",
+        "input": 1182,
+        "output": 30,
+        "total": 1212
+      }
+    ]
+  },
+  "liveLocal": {
+    "at": "2026-10-30T18:17:30.060Z",
+    "target": "local",
+    "errors": [],
+    "status": "failed",
+    "scrollReturnsPromise": true,
+    "streamStatus": 200,
+    "inlineErrors": [
+      "DeepSeek rejected the server API key. Ask the operator to update DEEPSEEK_API_KEY and restart the app and worker.Retry message"
+    ],
+    "checkError": {
+      "name": "TimeoutError",
+      "message": "locator.waitFor: Timeout 100000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('article.message.assistant p').filter({ hasText: 'CHAT_FIXED_OK' }) to be visible\u001b[22m\n"
+    }
+  },
+  "productionDeployment": {
+    "id": "dpl_J8i8pLySdWdGX6kWcCjJQQyFBMJe",
+    "url": "https://easysolve-xi.vercel.app",
+    "workerReadyInstances": 1,
+    "workerDesiredInstances": 1
+  },
+  "services": "Local web and worker restarted. Production web and worker promoted to the fixed release.",
+  "remainingBlocker": "Local DeepSeek authentication: the root .env key changed at 18:12 UTC during the task and the current value is rejected. The key was preserved. Production live chat passed with its existing securely configured key.",
+  "preservation": "No existing messages, credentials, users, billing records or GitHub settings were rewritten. Diagnostic accounts/sessions were removed; accidental diagnostic project was removed."
+}

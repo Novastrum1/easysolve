@@ -1,3 +1,5 @@
+> Historical record. Provider setup and current runtime statements below are superseded by the [DeepSeek configuration](../README.md#deepseek).
+
 # Current handoff — 2026-10-29
 
 ## Latest login repair

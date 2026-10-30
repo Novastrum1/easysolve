@@ -111,6 +111,7 @@ export function Workspace() {
   const router = useRouter();
   const pathname = usePathname();
   const page = pathname === "/" ? "overview" : pathname.split("/")[1];
+  const navigationPage = page === "checkout" ? "billing" : page;
   const [data, setData] = useState<Data>(null),
     [error, setError] = useState(""),
     [loading, setLoading] = useState(true),
@@ -133,7 +134,14 @@ export function Workspace() {
           : (d.identities.find((i: any) => i.active)?.id ?? ""),
       );
     } catch (e) {
-      setError((e as Error).message);
+      if (e instanceof RequestError && e.status === 401) {
+        setData(null);
+        setIdentity("");
+        setCommand(false);
+        setProfile(false);
+        setDrawer(false);
+        setError("");
+      } else setError((e as Error).message);
     } finally {
       setLoading(false);
     }
@@ -144,8 +152,12 @@ export function Workspace() {
     return () => clearInterval(timer);
   }, [refresh]);
   useEffect(() => {
-    const theme = localStorage.getItem("es-theme");
-    setLight(theme === "light");
+    try {
+      const theme = localStorage.getItem("es-theme");
+      setLight(theme === "light");
+    } catch {
+      // Theme switching remains available when browser storage is disabled.
+    }
   }, []);
   useEffect(() => {
     document.documentElement.dataset.theme = light ? "light" : "dark";
@@ -233,7 +245,7 @@ export function Workspace() {
   const title =
     (nav
       .flatMap((g) => g.items)
-      .find((i) => i[1] === `/${page}`)?.[0] as string) ?? "Overview";
+      .find((i) => i[1] === `/${navigationPage}`)?.[0] as string) ?? "Overview";
   return (
     <div className={`app ${collapsed ? "collapsed" : ""}`}>
       <a className="skip" href="#main">
@@ -301,7 +313,10 @@ export function Workspace() {
                     key={href}
                     href={href}
                     title={name}
-                    className={page === href.slice(1) ? "active" : ""}
+                    className={navigationPage === href.slice(1) ? "active" : ""}
+                    aria-current={
+                      navigationPage === href.slice(1) ? "page" : undefined
+                    }
                     onClick={() => setDrawer(false)}
                   >
                     <Icon size={18} />
@@ -347,8 +362,8 @@ export function Workspace() {
           <button
             className="collapse-button"
             onClick={() => setCollapsed((v) => !v)}
-            title="Collapse sidebar"
-            aria-label="Collapse sidebar"
+            title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+            aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
           >
             <PanelLeftClose size={17} />
             <span>Collapse sidebar</span>
@@ -393,7 +408,11 @@ export function Workspace() {
               aria-label="Toggle theme"
               onClick={() => {
                 setLight((v) => !v);
-                localStorage.setItem("es-theme", light ? "dark" : "light");
+                try {
+                  localStorage.setItem("es-theme", light ? "dark" : "light");
+                } catch {
+                  // The selected theme still applies for this visit.
+                }
               }}
             >
               {light ? <Moon size={18} /> : <Sun size={18} />}
@@ -421,8 +440,14 @@ export function Workspace() {
                   </button>
                   <button
                     onClick={async () => {
-                      await request("auth/logout", {});
-                      setData(null);
+                      try {
+                        await request("auth/logout", {});
+                        setData(null);
+                        setProfile(false);
+                        setError("");
+                      } catch (e) {
+                        setToast((e as Error).message);
+                      }
                     }}
                   >
                     <LogOut size={14} />

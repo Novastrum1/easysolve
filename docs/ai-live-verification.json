@@ -1,0 +1,76 @@
+{
+  "provider": "deepseek",
+  "model": "deepseek-flash",
+  "at": "2026-10-30T17:28:18.016Z",
+  "workflows": [
+    {
+      "name": "streaming connection and usage receipt",
+      "status": "verified"
+    },
+    {
+      "name": "persistent chat response",
+      "status": "verified"
+    },
+    {
+      "name": "harmless workspace tool call",
+      "status": "verified"
+    },
+    {
+      "name": "actual browser chat live response",
+      "status": "verified"
+    }
+  ],
+  "usage": [
+    {
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "purpose": "connection_verification",
+      "input": 20,
+      "cached": 0,
+      "reasoning": 0,
+      "output": 6,
+      "total": 26
+    },
+    {
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "purpose": "chat",
+      "input": 860,
+      "cached": 0,
+      "reasoning": 0,
+      "output": 3,
+      "total": 863
+    },
+    {
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "purpose": "chat",
+      "input": 886,
+      "cached": 512,
+      "reasoning": 0,
+      "output": 22,
+      "total": 908
+    },
+    {
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "purpose": "chat",
+      "input": 970,
+      "cached": 768,
+      "reasoning": 0,
+      "output": 29,
+      "total": 999
+    },
+    {
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "purpose": "chat",
+      "input": 870,
+      "cached": 512,
+      "output": 5,
+      "reasoning": 0,
+      "total": 875
+    }
+  ],
+  "browserCheckedAt": "2026-10-30T17:30:09.046Z"
+}

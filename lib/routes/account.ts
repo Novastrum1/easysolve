@@ -26,7 +26,7 @@ export async function handleAccount({
   const route = path.join("/");
   const method = request.method;
   if (route === "provider/test") {
-    if (!isProviderAdmin(u.id))
+    if (!(await isProviderAdmin(u.id)))
       throw new HttpError(
         403,
         "Only a configured provider administrator can test the shared AI connection.",
