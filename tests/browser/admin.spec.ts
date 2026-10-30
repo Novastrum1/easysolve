@@ -2,6 +2,7 @@ import "dotenv/config";
 import bcrypt from "bcryptjs";
 import { expect, test } from "@playwright/test";
 import { db } from "../../lib/db";
+const ratePrefix = `admin-browser-${crypto.randomUUID()}`;
 let adminId = "",
   ordinaryId = "",
   adminEmail = "",
@@ -42,9 +43,17 @@ test.beforeAll(async () => {
     })
   ).id;
 });
+test.beforeEach(async ({ context }) => {
+  await context.setExtraHTTPHeaders({
+    "X-Forwarded-For": `${ratePrefix}-${crypto.randomUUID()}`,
+  });
+});
 test.afterAll(async () => {
   await db.adminAudit.deleteMany({ where: { actorId: adminId } });
   await db.user.deleteMany({ where: { id: { in: [adminId, ordinaryId] } } });
+  await db.rateLimit.deleteMany({
+    where: { key: { startsWith: `auth:${ratePrefix}` } },
+  });
   await db.$disconnect();
 });
 test("anonymous and ordinary accounts cannot open admin pages or call admin APIs", async ({

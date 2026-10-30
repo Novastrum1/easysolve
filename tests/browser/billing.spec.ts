@@ -2,6 +2,7 @@ import "dotenv/config";
 import { expect, test } from "@playwright/test";
 import bcrypt from "bcryptjs";
 import { db } from "../../lib/db";
+const ratePrefix = `billing-browser-${crypto.randomUUID()}`;
 import type { Prisma } from "@prisma/client";
 const currentPlan = () =>
   db.planVersion.findFirstOrThrow({ orderBy: { version: "desc" } });
@@ -65,6 +66,11 @@ test.beforeAll(async () => {
     })
   ).id;
 });
+test.beforeEach(async ({ context }) => {
+  await context.setExtraHTTPHeaders({
+    "X-Forwarded-For": `${ratePrefix}-${crypto.randomUUID()}`,
+  });
+});
 test.afterAll(async () => {
   await db.adminAudit.deleteMany({
     where: { actorId: { in: [ownerId, userId] } },
@@ -73,6 +79,9 @@ test.afterAll(async () => {
   if (bootstrapCreated)
     await db.adminBootstrap.delete({ where: { id: "owner" } });
   await db.planVersion.deleteMany({ where: { actorId: ownerId } });
+  await db.rateLimit.deleteMany({
+    where: { key: { startsWith: `auth:${ratePrefix}` } },
+  });
   await db.$disconnect();
 });
 async function login(page: any, who: string) {
@@ -168,6 +177,9 @@ test("owner manages audited Pro grants and overrides without fabricating payment
   await page
     .getByRole("button", { name: "Grant Pro manually", exact: true })
     .click();
+  await expect(
+    page.getByText("Pro granted for 14 days from now.", { exact: true }),
+  ).toBeVisible();
   await expect
     .poll(
       async () =>
@@ -182,6 +194,9 @@ test("owner manages audited Pro grants and overrides without fabricating payment
   await page
     .getByRole("button", { name: "Save entitlement overrides" })
     .click();
+  await expect(
+    page.getByText("Entitlements updated.", { exact: true }),
+  ).toBeVisible();
   await expect
     .poll(
       async () =>
