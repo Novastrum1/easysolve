@@ -6,7 +6,7 @@
     "dev": "next dev --hostname 0.0.0.0",
     "worker": "tsx watch worker/index.ts",
     "start:all": "concurrently -k 'npm:dev' 'npm:worker'",
-    "build": "next build",
+    "build": "npm run db:generate && next build",
     "start": "next start --hostname 0.0.0.0",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
