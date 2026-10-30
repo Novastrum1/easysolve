@@ -1,0 +1,16 @@
+FROM node:24-bookworm-slim
+WORKDIR /app
+ENV NODE_ENV=production
+ENV SANDBOX_PROVIDER=vercel
+RUN apt-get update && apt-get install -y --no-install-recommends openssl ca-certificates && rm -rf /var/lib/apt/lists/*
+COPY package.json package-lock.json ./
+RUN npm ci
+COPY prisma ./prisma
+COPY prisma.config.ts ./prisma.config.ts
+RUN DATABASE_URL=postgresql://build:build@localhost:5432/build npm run db:generate
+COPY lib ./lib
+COPY worker ./worker
+COPY sandbox/runner.mjs ./sandbox/runner.mjs
+USER node
+RUN node --import tsx --input-type=module -e "await import('./worker/agent.ts')"
+CMD ["node", "--import", "tsx", "worker/index.ts"]

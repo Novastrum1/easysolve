@@ -1,6 +1,8 @@
 # Deployment and operations
 
-No public deployment, repository visibility change, external GitHub write, or payment setup was performed during implementation.
+The production application is deployed at https://easysolve-xi.vercel.app with
+one Vercel worker daemon. The web app and worker share the hosted database and
+encryption key; Vercel Sandbox provides isolated code execution.
 
 ## Production topology
 
@@ -8,9 +10,24 @@ No public deployment, repository visibility change, external GitHub write, or pa
 
 `vercel.json` builds the Next.js web app and generates its Prisma client.
 `.vercelignore` excludes local secrets, diagnostics and workspace files from uploads.
-Vercel hosts the web process; run the durable worker on a separate Docker-capable
-host. Both services must use the same hosted PostgreSQL database and the same
+Vercel hosts the web process and the durable worker declared under `daemons` in
+`vercel.json`. `Dockerfile.worker` packages the worker with `SANDBOX_PROVIDER=vercel`.
+Coding commands run in disposable Vercel Sandbox VMs with `deny-all` network
+policy, a 30-minute lifetime, and no application credentials. Production OIDC
+authenticates Sandbox requests automatically. Local workers still use Docker by
+default. Both services must use the same hosted PostgreSQL database and the same
 `TOKEN_ENCRYPTION_KEY`. A localhost database URL is not reachable from Vercel.
+
+The worker image validates its runtime imports during the build. `tsx` is a
+production dependency because the worker executes TypeScript directly. To test
+Sandbox separately without touching jobs or calling an AI provider, run
+`node --import tsx scripts/verify-vercel-sandbox.ts <private-vercel-env-file>`.
+This checks file writes, code execution, blocked network access and absence of
+application credentials in the test process, then stops the VM.
+
+Daemons and Sandbox use Vercel compute quotas/billing. Hobby daemon quotas do not
+cover uninterrupted operation for a full month, even when waiting for work; see
+[Vercel Daemons limits](https://vercel.com/docs/daemons/limits).
 
 Sign in with `npx vercel login`, link the intended project with `npx vercel link`,
 and configure production environment variables through Vercel's environment settings.
@@ -24,8 +41,10 @@ Before publishing, back up and migrate the chosen production database using
 admin access and encrypted GitHub credentials, migrate the existing database data
 and retain its encryption key; a fresh database contains none of those accounts.
 Publish using `npx vercel --prod`, then verify `/api/health`, sign-in, `/admin`,
-and the separately hosted worker. Migration execution is intentionally separate
+and the hosted worker. Migration execution is intentionally separate
 from the build to keep preview deployments from modifying production data.
+
+### Docker-capable self-hosting alternative
 
 Run a TLS reverse proxy, a Next.js web process, a separate worker service, PostgreSQL, and an isolated worker execution host. Only the reverse proxy exposes the web app. The web process has no Docker socket. The worker needs the database URL, encryption key, OpenAI credentials, outbound GitHub/OpenAI HTTPS, and access to a dedicated Docker daemon. Containers created by it have no network or credentials.
 

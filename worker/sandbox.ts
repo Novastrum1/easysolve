@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { VercelSandbox } from "./vercel-sandbox";
 export function command(
   args: string[],
   input?: string,
@@ -38,13 +39,18 @@ export function command(
 }
 export class Sandbox {
   name: string;
+  private remote?: VercelSandbox;
   constructor(id: string) {
+    const provider = process.env.SANDBOX_PROVIDER || "docker";
+    if (provider === "vercel") this.remote = new VercelSandbox();
+    else if (provider !== "docker") throw new Error("Unknown SANDBOX_PROVIDER");
     this.name = `easysolve-${id
       .toLowerCase()
       .replace(/[^a-z0-9]/g, "")
       .slice(0, 40)}`;
   }
   async create() {
+    if (this.remote) return this.remote.create();
     await command(["rm", "-f", this.name]).catch(() => {});
     await command([
       "run",
@@ -78,6 +84,7 @@ export class Sandbox {
     ]);
   }
   async op(payload: unknown) {
+    if (this.remote) return this.remote.op(payload);
     return command(
       ["exec", "-i", this.name, "node", "/runner.mjs"],
       JSON.stringify(payload),
@@ -85,6 +92,7 @@ export class Sandbox {
     );
   }
   async destroy() {
+    if (this.remote) return this.remote.destroy();
     await command(["rm", "-f", this.name]).catch(() => {});
   }
 }
