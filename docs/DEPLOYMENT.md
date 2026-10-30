@@ -4,6 +4,29 @@ No public deployment, repository visibility change, external GitHub write, or pa
 
 ## Production topology
 
+### Vercel web deployment
+
+`vercel.json` builds the Next.js web app and generates its Prisma client.
+`.vercelignore` excludes local secrets, diagnostics and workspace files from uploads.
+Vercel hosts the web process; run the durable worker on a separate Docker-capable
+host. Both services must use the same hosted PostgreSQL database and the same
+`TOKEN_ENCRYPTION_KEY`. A localhost database URL is not reachable from Vercel.
+
+Sign in with `npx vercel login`, link the intended project with `npx vercel link`,
+and configure production environment variables through Vercel's environment settings.
+Set `DATABASE_URL`, `TOKEN_ENCRYPTION_KEY`, `APP_URL` (the exact production HTTPS
+origin), `COOKIE_SECURE=true`, and the selected provider's configuration from
+`.env.example`. Configure `ADMIN_ORIGIN` only when using a separate admin origin.
+Never upload the local `.env` file or print secret values.
+
+Before publishing, back up and migrate the chosen production database using
+`npm run db:migrate` with that database's environment. To preserve existing login,
+admin access and encrypted GitHub credentials, migrate the existing database data
+and retain its encryption key; a fresh database contains none of those accounts.
+Publish using `npx vercel --prod`, then verify `/api/health`, sign-in, `/admin`,
+and the separately hosted worker. Migration execution is intentionally separate
+from the build to keep preview deployments from modifying production data.
+
 Run a TLS reverse proxy, a Next.js web process, a separate worker service, PostgreSQL, and an isolated worker execution host. Only the reverse proxy exposes the web app. The web process has no Docker socket. The worker needs the database URL, encryption key, OpenAI credentials, outbound GitHub/OpenAI HTTPS, and access to a dedicated Docker daemon. Containers created by it have no network or credentials.
 
 ```bash

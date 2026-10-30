@@ -55,6 +55,33 @@ it("never returns internal errors or secrets", () => {
   expect(safeEqual("a", "b")).toBe(false);
 });
 
+it("accepts Codespaces origin rewriting only for the configured host and same-origin browser requests", () => {
+  process.env.APP_URL = "https://example-3000.app.github.dev";
+  const headers = {
+    origin: "http://localhost:3000",
+    host: "localhost:3000",
+    "x-forwarded-host": "example-3000.app.github.dev",
+    "sec-fetch-site": "same-origin",
+  };
+  const check = (overrides: Record<string, string> = {}) =>
+    csrf(new Request("http://localhost:3000/api/auth/login", {
+      headers: { ...headers, ...overrides },
+    }));
+  expect(() => check()).not.toThrow();
+  const rejectedHeaders: Record<string, string>[] = [
+    { origin: "https://evil.test" },
+    { origin: "null" },
+    { "x-forwarded-host": "other-3000.app.github.dev" },
+    { "sec-fetch-site": "cross-site" },
+    { "sec-fetch-site": "" },
+    { host: "evil.test" },
+  ];
+  for (const overrides of rejectedHeaders)
+    expect(() => check(overrides)).toThrow("Request origin rejected");
+  process.env.APP_URL = "https://production.example";
+  expect(() => check()).toThrow("Request origin rejected");
+});
+
 it("patch fingerprints survive PostgreSQL JSON key ordering", async () => {
   const { patchHash } = await import("../lib/security");
   expect(patchHash({ "z.js": "z", "a.js": "a" })).toBe(

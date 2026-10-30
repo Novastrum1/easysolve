@@ -1,4 +1,5 @@
 node_modules
+.vercel
 .next
 .env
 .env.local
@@ -11,3 +12,4 @@ artifacts
 .env.*
 !.env.example
 *.log
+.env*

@@ -88,11 +88,38 @@ export async function session(userId: string) {
 export function csrf(request: Request) {
   const origin = request.headers.get("origin");
   const expected = process.env.APP_URL || new URL(request.url).origin;
+  // Codespaces rewrites Origin and Host to its local forwarding target.
+  // Require browser same-origin metadata and the explicitly configured public
+  // host before accepting that exact loopback origin.
+  const forwardedHost = request.headers.get("x-forwarded-host");
+  const forwardedSameOrigin = [expected, process.env.ADMIN_ORIGIN].some(
+    (allowed) => {
+      if (!allowed) return false;
+      const publicUrl = new URL(allowed);
+      return (
+        publicUrl.protocol === "https:" &&
+        publicUrl.hostname.endsWith(".app.github.dev") &&
+        forwardedHost === publicUrl.host &&
+        request.headers.get("host") === "localhost:3000" &&
+        origin === "http://localhost:3000" &&
+        request.headers.get("sec-fetch-site") === "same-origin"
+      );
+    },
+  );
   if (
-    !origin ||
-    ![expected, process.env.ADMIN_ORIGIN].filter(Boolean).includes(origin)
-  )
+    !forwardedSameOrigin &&
+    (!origin ||
+      ![expected, process.env.ADMIN_ORIGIN].filter(Boolean).includes(origin))
+  ) {
+    console.warn("Request origin rejected", {
+      origin,
+      expected,
+      host: request.headers.get("host"),
+      forwardedHost: request.headers.get("x-forwarded-host"),
+      fetchSite: request.headers.get("sec-fetch-site"),
+    });
     throw new HttpError(403, "Request origin rejected");
+  }
 }
 export async function rateLimit(key: string, limit = 30, windowSeconds = 60) {
   const now = new Date();

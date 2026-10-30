@@ -10,14 +10,15 @@ export function UserEntitlementControls({
 }) {
   const [data, setData] = useState<any>(null),
     [reason, setReason] = useState(""),
-    [days, setDays] = useState(""),
+    [days, setDays] = useState("30"),
     [lifetime, setLifetime] = useState(false),
     [issueLimit, setIssueLimit] = useState(""),
     [githubLimit, setGithubLimit] = useState(""),
     [issueExpiry, setIssueExpiry] = useState(""),
     [githubExpiry, setGithubExpiry] = useState(""),
     [busy, setBusy] = useState(false),
-    [error, setError] = useState("");
+    [error, setError] = useState(""),
+    [success, setSuccess] = useState("");
   const load = async () => {
     const d = await request(`admin/users/${userId}`);
     setData(d);
@@ -40,6 +41,7 @@ export function UserEntitlementControls({
   const act = async (action: string) => {
     setBusy(true);
     setError("");
+    setSuccess("");
     try {
       await request(`admin/entitlements/${userId}`, {
         action,
@@ -62,6 +64,17 @@ export function UserEntitlementControls({
       });
       await load();
       onSaved();
+      setSuccess(
+        action === "grant"
+          ? lifetime
+            ? "Lifetime Pro granted."
+            : `Pro granted for ${days} days from now.`
+          : action === "extend"
+            ? lifetime
+              ? "Lifetime Pro granted."
+              : `Pro extended by ${days} days from the current expiry, or from now if expired.`
+            : "Entitlements updated.",
+      );
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -70,6 +83,11 @@ export function UserEntitlementControls({
   };
   if (!data) return <p role="status">Loading entitlement details…</p>;
   const e = data.entitlements;
+  const validDuration =
+    lifetime ||
+    (Number.isInteger(Number(days)) &&
+      Number(days) >= 1 &&
+      Number(days) <= 36500);
   return (
     <section
       style={{
@@ -104,17 +122,22 @@ export function UserEntitlementControls({
       </p>
       <Field label="Required entitlement change reason">
         <textarea
+          placeholder="For example: complimentary access or support adjustment"
           value={reason}
           onChange={(e) => setReason(e.target.value)}
           minLength={3}
           required
         />
       </Field>
+      <p>Enter a reason of at least 3 characters to enable these actions.</p>
       <div className="two-column">
         <Field label="Manual Pro duration in days">
           <input
             type="number"
             min={1}
+            max={36500}
+            step={1}
+            disabled={lifetime}
             value={days}
             onChange={(e) => setDays(e.target.value)}
           />
@@ -128,13 +151,20 @@ export function UserEntitlementControls({
           Explicit lifetime manual grant
         </label>
       </div>
+      <p>
+        Grant starts Pro access now for the selected number of days. Extend adds
+        days to the current expiry, or starts from now when access has expired.
+      </p>
       <div className="inline-form">
         {["grant", "extend", "revoke", "reset"].map((action) => (
           <Button
             key={action}
             variant="secondary"
             busy={busy}
-            disabled={reason.trim().length < 3}
+            disabled={
+              reason.trim().length < 3 ||
+              (["grant", "extend"].includes(action) && !validDuration)
+            }
             onClick={() => void act(action)}
           >
             {
@@ -150,6 +180,10 @@ export function UserEntitlementControls({
           </Button>
         ))}
       </div>
+      {!validDuration && (
+        <p role="alert">Enter a whole number of days from 1 to 36500.</p>
+      )}
+      {success && <p role="status">{success}</p>}
       <p>
         Manual grants are audited separately and do not create payment receipts.
         Reset changes the allowance window but retains solve history and active
