@@ -1,4 +1,5 @@
 import "dotenv/config";
+import { randomBytes } from "node:crypto";
 import { afterAll, beforeAll, expect, it, vi } from "vitest";
 const cookie = vi.hoisted(() => ({ token: "" }));
 vi.mock("next/headers", () => ({
@@ -176,6 +177,7 @@ function transaction(invoice: any, overrides: any = {}) {
   return { hash: txHash, op };
 }
 beforeAll(async () => {
+  vi.stubEnv("TOKEN_ENCRYPTION_KEY", randomBytes(32).toString("base64"));
   owner = await user("ADMIN");
   basic = await user();
   other = await user();
@@ -221,6 +223,7 @@ afterAll(async () => {
   await db.paymentCursor.deleteMany({ where: { recipient: address } });
   await db.planVersion.deleteMany({ where: { actorId: owner } });
   await db.$disconnect();
+  vi.unstubAllEnvs();
 });
 it("denies every new admin API to ordinary users and prevents privilege/entitlement escalation", async () => {
   await login(basic);
