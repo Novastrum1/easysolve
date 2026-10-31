@@ -101,7 +101,7 @@ References: [Chat Completions](https://api-docs.deepseek.com/api/create-chat-com
 2. Browse GitHub issues, import an issue, or let the worker sync assigned issues every 15 minutes. Importing never starts a coding run.
 3. Explicitly select issues and confirm a solve. Issues are grouped by repository, at most four per branch and PR.
 4. The worker inspects text source, plans, edits, and runs commands inside a disposable offline container. The run records its plan, activity, full replacement diff, artifacts, actual command results, failures, and per-run tokens.
-5. Review the exact patch. Default policy requires approval before GitHub commits, branches, or PRs. Publication creates a draft PR, using a verified contributor fork if direct write access is unavailable. Plan-only mode never edits or publishes.
+5. The agent publishes a draft PR automatically for explicitly started runs, using a verified contributor fork if direct write access is unavailable. Review mode can be selected when a manual patch gate is required; plan-only mode never edits or publishes.
 6. Mark the draft ready on GitHub when appropriate. Sync the review queue for actual reviews, checks, and mergeability. Reviews and merges reference the inspected commit SHA. Bulk merges preview exact heads and report each result.
 
 Assignments are proposals, with assignability and configured limits checked before preview and again before applying. Partial failures remain visible and retries skip completed assignments. Wave apply matches live issue candidates against supplied experience and creates editable drafts. Submission and identity verification on Drips stay manual; EasySolve’s counts are local tracking only.

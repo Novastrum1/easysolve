@@ -44,9 +44,9 @@ describe("workflow policies", () => {
     ])
       expect(() => repoName(value)).toThrow();
   });
-  it("defaults to approval and autosync, validates limits", () => {
+  it("defaults to automatic publication and autosync, validates limits", () => {
     expect(settings({})).toMatchObject({
-      mode: "approval",
+      mode: "automatic",
       autosync: true,
       waveLimit: 3,
     });

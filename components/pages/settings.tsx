@@ -347,12 +347,12 @@ export function SettingsPage(c: Context) {
             [
               "approval",
               "Review before publishing",
-              "Default. Approve the exact patch before any commit, branch, or pull request.",
+              "Review the exact patch before any commit, branch, or pull request.",
             ],
             [
               "automatic",
               "Publish explicitly started runs",
-              "Allow explicitly started runs to create a draft pull request automatically.",
+              "Default. Explicitly started runs create a draft pull request automatically.",
             ],
             [
               "plan",
@@ -375,7 +375,7 @@ export function SettingsPage(c: Context) {
                 <strong>{title}</strong>
                 <p>{description}</p>
               </div>
-              {value === "approval" && (
+              {value === "automatic" && (
                 <span className="default-tag">Recommended</span>
               )}
             </label>

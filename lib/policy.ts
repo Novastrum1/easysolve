@@ -11,7 +11,7 @@ export function planLimits(u: {
   };
 }
 export const settingsSchema = z.object({
-  mode: z.enum(["approval", "automatic", "plan"]).default("approval"),
+  mode: z.enum(["approval", "automatic", "plan"]).default("automatic"),
   autosync: z.boolean().default(true),
   waveLimit: z.number().int().min(1).max(100).default(3),
   monthlyTokens: z.number().int().min(1000).max(100000000).default(1000000),
