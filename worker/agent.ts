@@ -14,6 +14,17 @@ const responseSchema = z.object({
   command: z.string().max(2000).nullable().default(null),
   summary: z.string().nullable().default(null),
 });
+function parseAgentResponse(raw: string) {
+  const text = raw
+    .trim()
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/\s*```$/i, "");
+  const start = text.indexOf("{");
+  const end = text.lastIndexOf("}");
+  return responseSchema.parse(
+    JSON.parse(start >= 0 && end > start ? text.slice(start, end + 1) : text),
+  );
+}
 export async function executeRun(userId: string, id: string) {
   const account = await db.user.findUniqueOrThrow({ where: { id: userId } });
   if (account.suspendedAt) throw Error("Account suspended");
@@ -130,9 +141,7 @@ export async function executeRun(userId: string, id: string) {
         undefined,
         zodTextFormat(responseSchema, "agent_action"),
       );
-      const action = responseSchema.parse(
-        JSON.parse(raw.replace(/^```(?:json)?\s*|\s*```$/g, "")),
-      );
+      const action = parseAgentResponse(raw);
       plan = action.plan;
       await db.run.update({ where: { id }, data: { plan } });
       await log(

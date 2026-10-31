@@ -184,6 +184,30 @@ it("rejects missing usage, unknown tools, invalid schemas and credentials redire
   vi.stubEnv("DEEPSEEK_BASE_URL", "https://api.openai.com/v1");
   expect(() => deepseekConfig()).toThrow("official");
 });
+it("accepts fenced JSON with a short explanatory prefix", async () => {
+  create.mockResolvedValueOnce(
+    stream([
+      chunk(
+        { content: 'Here is the result:\n```json\n{"ok":true}\n```' },
+        "stop",
+        usage,
+      ),
+    ]),
+  );
+  const value = await generateDeepSeek({
+    ...input,
+    format: {
+      type: "json_schema",
+      name: "result",
+      schema: {
+        type: "object",
+        properties: { ok: { type: "boolean" } },
+        required: ["ok"],
+      },
+    },
+  });
+  expect(value.failure).toBeNull();
+});
 it.each([
   [401, "AI_AUTHENTICATION"],
   [402, "AI_QUOTA"],

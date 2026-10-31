@@ -47,6 +47,17 @@ export function deepseekConfig() {
   };
 }
 const validator = new Ajv({ strict: false, validateFormats: false });
+function parseJsonObject(value: string) {
+  const text = value
+    .trim()
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/\s*```$/i, "");
+  const start = text.indexOf("{");
+  const end = text.lastIndexOf("}");
+  return JSON.parse(
+    start >= 0 && end > start ? text.slice(start, end + 1) : text,
+  );
+}
 export async function generateDeepSeek(input: {
   instructions: string;
   input: string;
@@ -183,12 +194,16 @@ export async function generateDeepSeek(input: {
         ? new AIProviderError(
             "AI_USAGE_MISSING",
             "DeepSeek omitted a valid usage receipt. No action was accepted.",
+            502,
+            true,
           )
         : null;
     if (!failure && !list.length && !text.trim())
       failure = new AIProviderError(
         "AI_EMPTY_OUTPUT",
         "DeepSeek returned no usable output. No action was applied.",
+        502,
+        true,
       );
     if (!failure) {
       try {
@@ -207,14 +222,16 @@ export async function generateDeepSeek(input: {
         }
         if (
           input.format?.type === "json_schema" &&
-          !validator.validate(input.format.schema, JSON.parse(text))
+          !validator.validate(input.format.schema, parseJsonObject(text))
         )
           throw Error();
-        if (input.format?.type === "json_object") JSON.parse(text);
+        if (input.format?.type === "json_object") parseJsonObject(text);
       } catch {
         failure = new AIProviderError(
           "AI_INVALID_OUTPUT",
           "DeepSeek returned invalid JSON or tool arguments. No action was applied.",
+          502,
+          true,
         );
       }
     }
