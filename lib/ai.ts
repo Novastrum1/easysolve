@@ -64,11 +64,7 @@ export async function ai(
           where: { userId, createdAt: { gte: window.start } },
           _sum: { total: true },
         });
-        const max = limit(
-          "AI_MAX_OUTPUT_TOKENS",
-          runId ? 12000 : 6000,
-          128000,
-        );
+        const max = limit("AI_MAX_OUTPUT_TOKENS", runId ? 12000 : 6000, 128000);
         const reserve =
           Buffer.byteLength(
             input +
@@ -83,12 +79,49 @@ export async function ai(
           512 +
           max;
         const runScoped = !!runId;
-        if (!runScoped && (usage._sum.total ?? 0) + reserve > planLimits(u).tokens)
+        if (runScoped && process.env.AI_JOB_MAX_TOKENS?.trim()) {
+          const jobMaxTokens = limit(
+            "AI_JOB_MAX_TOKENS",
+            Number.MAX_SAFE_INTEGER,
+            Number.MAX_SAFE_INTEGER,
+          );
+          const jobUsage = await tx.usage.aggregate({
+            where: { userId, runId },
+            _sum: { total: true },
+          });
+          if ((jobUsage._sum.total ?? 0) + reserve > jobMaxTokens)
+            throw new HttpError(
+              429,
+              "This run reached its AI token budget; retry with a larger configured budget.",
+            );
+        }
+        if (runScoped && process.env.AI_JOB_MAX_REQUESTS?.trim()) {
+          const jobMaxRequests = limit(
+            "AI_JOB_MAX_REQUESTS",
+            Number.MAX_SAFE_INTEGER,
+            Number.MAX_SAFE_INTEGER,
+          );
+          const jobRequests = await tx.aIRequest.count({
+            where: { userId, runId },
+          });
+          if (jobRequests >= jobMaxRequests)
+            throw new HttpError(
+              429,
+              "This run reached its AI request budget; retry with a larger configured budget.",
+            );
+        }
+        if (
+          !runScoped &&
+          (usage._sum.total ?? 0) + reserve > planLimits(u).tokens
+        )
           throw new AllowanceError(
             "Plan token allowance exhausted; queued until next reset",
             nextMonth(),
           );
-        if (!runScoped && (cycle._sum.total ?? 0) + reserve > config.monthlyTokens)
+        if (
+          !runScoped &&
+          (cycle._sum.total ?? 0) + reserve > config.monthlyTokens
+        )
           throw new AllowanceError(
             "Token allowance exhausted; queued until configured reset",
             window.reset,

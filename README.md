@@ -63,6 +63,8 @@ Copy the documented names in [.env.example](.env.example); never commit `.env`.
 | `DEEPSEEK_THINKING`          | `disabled` by default; `enabled` retains private reasoning only in transient tool history |
 | `DEEPSEEK_TIMEOUT_MS`        | Streaming deadline, default and maximum 90000 ms                                          |
 | `AI_MAX_OUTPUT_TOKENS`       | Per-request output ceiling, default 6,000                                                 |
+| `AI_JOB_MAX_TOKENS`          | Optional per-run total token ceiling; blank means no additional run-scoped ceiling        |
+| `AI_JOB_MAX_REQUESTS`        | Optional per-run provider request ceiling; blank means no additional run-scoped ceiling   |
 | `PLAN_NAME`                  | Self-hosted plan label, default Personal                                                  |
 | `PLAN_MAX_JOBS`              | Server-enforced monthly job ceiling per user, default 50                                  |
 | `PLAN_MAX_TOKENS`            | Server-enforced monthly token ceiling per user, default 1,000,000                         |
