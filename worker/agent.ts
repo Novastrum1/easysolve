@@ -13,42 +13,37 @@ const responseSchema = z.object({
   command: z.string().max(2000).nullable().optional(),
   summary: z.string().nullable().optional(),
 });
-// DeepSeek supports JSON schema validation, but the OpenAI Zod helper marks
-// every object property as required in strict mode, including optional ones.
-// Only plan/action are required for every step; the other fields depend on the
-// selected action.
-const agentOutputFormat = {
-  type: "json_schema" as const,
-  name: "agent_action",
-  strict: true,
-  schema: {
-    type: "object",
-    properties: {
-      plan: { type: "string" },
-      action: { type: "string", enum: ["read", "write", "test", "finish"] },
-      path: { type: ["string", "null"] },
-      content: {
-        anyOf: [{ type: "string", maxLength: 200000 }, { type: "null" }],
-      },
-      command: {
-        anyOf: [{ type: "string", maxLength: 2000 }, { type: "null" }],
-      },
-      summary: { type: ["string", "null"] },
-    },
-    required: ["plan", "action"],
-    additionalProperties: false,
-  },
-};
+// DeepSeek's JSON mode is more reliable than strict schema mode for this
+// multi-step coding loop. The complete action is validated locally with Zod.
+const agentOutputFormat = { type: "json_object" as const };
 function parseAgentResponse(raw: string) {
   const text = raw
     .trim()
     .replace(/^```(?:json)?\s*/i, "")
     .replace(/\s*```$/i, "");
   const start = text.indexOf("{");
-  const end = text.lastIndexOf("}");
-  const parsed = responseSchema.parse(
-    JSON.parse(start >= 0 && end > start ? text.slice(start, end + 1) : text),
-  );
+  if (start < 0) throw new SyntaxError("Agent response did not contain JSON");
+  let depth = 0;
+  let quoted = false;
+  let escaped = false;
+  let end = -1;
+  for (let i = start; i < text.length; i++) {
+    const character = text[i];
+    if (quoted) {
+      if (escaped) escaped = false;
+      else if (character === "\\") escaped = true;
+      else if (character === '"') quoted = false;
+      continue;
+    }
+    if (character === '"') quoted = true;
+    else if (character === "{") depth++;
+    else if (character === "}" && --depth === 0) {
+      end = i;
+      break;
+    }
+  }
+  if (end < 0) throw new SyntaxError("Agent response contained incomplete JSON");
+  const parsed = responseSchema.parse(JSON.parse(text.slice(start, end + 1)));
   return {
     ...parsed,
     path: parsed.path ?? null,
@@ -164,16 +159,38 @@ export async function executeRun(userId: string, id: string) {
       if (Date.now() > deadline) throw Error("Run exceeded execution timeout");
       const current = await db.run.findFirstOrThrow({ where: { id, userId } });
       if (current.status === "cancelled") throw Error("Run cancelled");
-      const raw = await ai(
-        userId,
-        repairing ? "repair" : "coding",
-        `${context}\nActivity:\n${transcript.join("\n").slice(-100000)}\nReviewer feedback: ${run.feedback}`,
-        instruction,
-        id,
-        undefined,
-        agentOutputFormat,
-      );
-      const action = parseAgentResponse(raw);
+      const actionInput = `${context}\nActivity:\n${transcript.join("\n").slice(-100000)}\nReviewer feedback: ${run.feedback}`;
+      let action;
+      for (let attempt = 0; attempt < 2; attempt++) {
+        try {
+          const raw = await ai(
+            userId,
+            repairing ? "repair" : "coding",
+            actionInput,
+            attempt
+              ? `${instruction}\nYour previous response was not usable. Return exactly one complete JSON object with no markdown, commentary, or extra keys.`
+              : instruction,
+            id,
+            undefined,
+            agentOutputFormat,
+          );
+          action = parseAgentResponse(raw);
+          break;
+        } catch (error) {
+          const code = (error as { code?: string })?.code;
+          if (
+            attempt === 0 &&
+            (error instanceof z.ZodError ||
+              error instanceof SyntaxError ||
+              ["AI_INVALID_OUTPUT", "AI_INCOMPLETE", "AI_EMPTY_OUTPUT"].includes(
+                code ?? "",
+              ))
+          )
+            continue;
+          throw error;
+        }
+      }
+      if (!action) throw Error("Agent did not return a valid action");
       plan = action.plan;
       await db.run.update({ where: { id }, data: { plan } });
       await log(

@@ -53,10 +53,24 @@ function parseJsonObject(value: string) {
     .replace(/^```(?:json)?\s*/i, "")
     .replace(/\s*```$/i, "");
   const start = text.indexOf("{");
-  const end = text.lastIndexOf("}");
-  return JSON.parse(
-    start >= 0 && end > start ? text.slice(start, end + 1) : text,
-  );
+  if (start < 0) return JSON.parse(text);
+  let depth = 0;
+  let quoted = false;
+  let escaped = false;
+  for (let i = start; i < text.length; i++) {
+    const character = text[i];
+    if (quoted) {
+      if (escaped) escaped = false;
+      else if (character === "\\") escaped = true;
+      else if (character === '"') quoted = false;
+      continue;
+    }
+    if (character === '"') quoted = true;
+    else if (character === "{") depth++;
+    else if (character === "}" && --depth === 0)
+      return JSON.parse(text.slice(start, i + 1));
+  }
+  return JSON.parse(text);
 }
 export async function generateDeepSeek(input: {
   instructions: string;
