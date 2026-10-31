@@ -396,6 +396,7 @@ export function IssuesPage(c: Context) {
     [sort, setSort] = useState("newest"),
     [selected, setSelected] = useState<string[]>([]),
     [confirm, setConfirm] = useState(false),
+    [syncBusy, setSyncBusy] = useState(false),
     [busy, setBusy] = useState(false);
   const list = c.data.issues
     .filter(
@@ -442,12 +443,18 @@ export function IssuesPage(c: Context) {
           <>
             <Button
               variant="secondary"
-              onClick={() =>
-                void c
-                  .act("sync", {})
-                  .then((r) => c.notify(r.message))
-                  .catch(() => {})
-              }
+              busy={syncBusy}
+              onClick={async () => {
+                setSyncBusy(true);
+                try {
+                  const result = await c.act("sync", {});
+                  c.notify(result.message);
+                } catch {
+                  // act() already displays the server error.
+                } finally {
+                  setSyncBusy(false);
+                }
+              }}
             >
               <RefreshCw size={15} />
               Sync issues

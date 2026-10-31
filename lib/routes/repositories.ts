@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "../db";
-import { github } from "../github";
+import { github, syncIssues } from "../github";
 import { repoName } from "../policy";
 import { enqueue } from "../queue";
 import { HttpError } from "../security";
@@ -63,19 +63,24 @@ export async function handleRepositories({
       where: {
         userId: u.id,
         active: true,
+        usable: true,
         ...(body.identityId ? { id: id.parse(body.identityId) } : {}),
       },
     });
     if (!identities.length)
       throw new HttpError(422, "Connect an active GitHub identity first");
+    const results: { identityId: string; count: number }[] = [];
     for (const i of identities)
-      await enqueue(
-        u.id,
-        "sync",
-        `manual-sync:${i.id}:${Math.floor(Date.now() / 60000)}`,
-        { identityId: i.id },
-      );
-    return json({ message: "Sync queued. No coding runs will be started." });
+      results.push({
+        identityId: i.id,
+        count: (await syncIssues(u.id, i.id)).count,
+      });
+    const count = results.reduce((total, result) => total + result.count, 0);
+    return json({
+      count,
+      identities: results,
+      message: `Synced ${count} assigned issue${count === 1 ? "" : "s"}.`,
+    });
   }
   if (route === "discover") {
     const identityId = id.parse(url.searchParams.get("identityId"));
