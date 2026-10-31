@@ -178,7 +178,6 @@ describe("durable issue → run → approval → PR workflow", () => {
     model
       .mockResolvedValueOnce(
         JSON.stringify({
-          ...{ path: null, content: null, command: null, summary: null },
           plan: "Fix sum",
           action: "read",
           path: "sum.js",

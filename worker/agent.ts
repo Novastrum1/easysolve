@@ -9,10 +9,10 @@ import { Sandbox } from "./sandbox";
 const responseSchema = z.object({
   plan: z.string(),
   action: z.enum(["read", "write", "test", "finish"]),
-  path: z.string().nullable(),
-  content: z.string().max(200000).nullable(),
-  command: z.string().max(2000).nullable(),
-  summary: z.string().nullable(),
+  path: z.string().nullable().default(null),
+  content: z.string().max(200000).nullable().default(null),
+  command: z.string().max(2000).nullable().default(null),
+  summary: z.string().nullable().default(null),
 });
 export async function executeRun(userId: string, id: string) {
   const account = await db.user.findUniqueOrThrow({ where: { id: userId } });
