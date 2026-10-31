@@ -302,37 +302,60 @@ async function publishLocked(userId: string, id: string) {
   let headOwner = run.repo.split("/")[0];
   if (repository.permissions?.push !== true) {
     headOwner = githubUser.login;
-    targetRepo = `${githubUser.login}/${run.repo.split("/")[1]}`;
-    let requestedFork = false;
-    let fork: any = null;
     const forkReady = (candidate: any) =>
       candidate?.parent?.full_name === run.repo ||
       candidate?.source?.full_name === run.repo;
-    for (let attempt = 0; attempt < 6; attempt++) {
-      try {
-        fork = await gh.request(`/repos/${targetRepo}`);
-      } catch (e) {
-        if (!(e instanceof Error) || !e.message.includes("404")) throw e;
-        if (!requestedFork) {
-          await gh.request(`/repos/${run.repo}/forks`, "POST", {
-            default_branch_only: true,
-          });
-          requestedFork = true;
+    const waitForFork = async (initialRepo: string, body: Record<string, string | boolean>) => {
+      let candidateRepo = initialRepo;
+      let requestedFork = false;
+      let fork: any = null;
+      for (let attempt = 0; attempt < 6; attempt++) {
+        try {
+          fork = await gh.request(`/repos/${candidateRepo}`);
+        } catch (e) {
+          if (!(e instanceof Error) || !e.message.includes("404")) throw e;
+          if (!requestedFork) {
+            let created: any;
+            try {
+              created = await gh.request(`/repos/${run.repo}/forks`, "POST", body);
+            } catch (createError) {
+              // A concurrent fork request can win the race. Continue polling
+              // the requested name rather than treating GitHub's 422 as fatal.
+              if (!(createError instanceof Error) || !createError.message.includes("422"))
+                throw createError;
+            }
+            requestedFork = true;
+            if (created?.full_name) candidateRepo = created.full_name;
+          }
+          fork = null;
         }
-        fork = null;
+        if (forkReady(fork)) return candidateRepo;
+        // A repository with a parent/source from another upstream is not a
+        // pending fork. Let the caller choose a unique, correctly linked fork.
+        if (fork?.parent?.full_name || fork?.source?.full_name) return null;
+        if (attempt < 5)
+          await new Promise((resolve) => setTimeout(resolve, 250 * 2 ** attempt));
       }
-      if (forkReady(fork)) break;
-      if (fork?.parent?.full_name || fork?.source?.full_name)
-        throw Error(
-          "Fork identity is not ready or belongs to a different repository. Retry publication after GitHub finishes creating the fork.",
-        );
-      if (attempt < 5)
-        await new Promise((resolve) => setTimeout(resolve, 250 * 2 ** attempt));
+      return null;
+    };
+    const repositoryName = run.repo.split("/")[1];
+    targetRepo =
+      (await waitForFork(`${githubUser.login}/${repositoryName}`, {
+        default_branch_only: true,
+      })) ?? "";
+    if (!targetRepo) {
+      const fallbackName = `fix-${repositoryName}-${id.slice(0, 8)}`;
+      targetRepo =
+        (await waitForFork(`${githubUser.login}/${fallbackName}`, {
+          default_branch_only: true,
+          name: fallbackName,
+        })) ?? "";
     }
-    if (!forkReady(fork))
+    if (!targetRepo)
       throw Error(
-        "Fork identity is not ready or belongs to a different repository. GitHub did not finish creating the fork in time; retry publication.",
+        "GitHub could not create a fork linked to the assigned repository. Check that the connected account can create forks, then retry publication.",
       );
+    headOwner = targetRepo.split("/")[0];
   }
   const existing = await gh.request(
     `/repos/${run.repo}/pulls?head=${encodeURIComponent(headOwner + ":" + run.branch)}&state=all`,
