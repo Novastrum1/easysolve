@@ -64,7 +64,11 @@ export async function ai(
           where: { userId, createdAt: { gte: window.start } },
           _sum: { total: true },
         });
-        const max = limit("AI_MAX_OUTPUT_TOKENS", 6000, 128000);
+        const max = limit(
+          "AI_MAX_OUTPUT_TOKENS",
+          runId ? 12000 : 6000,
+          128000,
+        );
         const reserve =
           Buffer.byteLength(
             input +

@@ -133,6 +133,7 @@ it.each(["length", "content_filter", null])(
     );
     const value = await generateDeepSeek(input);
     expect(value.failure?.code).toBe("AI_INCOMPLETE");
+    expect(value.failure?.retryable).toBe(true);
     expect(value.usage?.total_tokens).toBe(20);
   },
 );

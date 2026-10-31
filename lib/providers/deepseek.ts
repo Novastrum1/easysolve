@@ -176,6 +176,8 @@ export async function generateDeepSeek(input: {
       ? new AIProviderError(
           "AI_INCOMPLETE",
           "DeepSeek output was interrupted, truncated, or filtered. Partial actions were not applied.",
+          502,
+          true,
         )
       : !usage
         ? new AIProviderError(
