@@ -51,15 +51,37 @@ export async function github(userId: string, identityId: string) {
   const i = await assertIdentityAccess(userId, identityId);
   return new GitHub(decrypt(i.token));
 }
+async function assignedIssues(gh: GitHub, login: string) {
+  const issues = await gh.pages("/issues?filter=assigned&state=all");
+  if (issues.length) return issues;
+
+  // Fine-grained tokens and organization visibility rules can occasionally
+  // return an empty global list even though the account can find its issues.
+  // Search is scoped to the authenticated account and gives us a reliable
+  // fallback without requiring a repository to be managed first.
+  const result = await gh.request<{ items?: any[] }>(
+    `/search/issues?q=${encodeURIComponent(`assignee:${login} is:issue`)}&per_page=100&page=1`,
+  );
+  return (result.items ?? []).map((issue: any) => ({
+    ...issue,
+    repository: {
+      full_name:
+        issue.repository?.full_name ??
+        issue.repository_url?.split("/repos/")[1] ??
+        "",
+    },
+  }));
+}
 export async function syncIssues(userId: string, identityId: string) {
   const gh = await github(userId, identityId);
   const identity = await db.identity.findFirstOrThrow({
     where: { id: identityId, userId },
   });
   try {
-    const issues = await gh.pages("/issues?filter=assigned&state=all");
+    const issues = await assignedIssues(gh, identity.login);
     for (const i of issues.filter((i) => !i.pull_request)) {
       const repo = i.repository.full_name;
+      if (!repo) continue;
       await db.issue.upsert({
         where: { userId_repo_number: { userId, repo, number: i.number } },
         create: {

@@ -59,6 +59,7 @@ it("syncs actual provider-shaped records idempotently without creating coding jo
     vi
       .fn()
       .mockResolvedValueOnce(Response.json([]))
+      .mockResolvedValueOnce(Response.json({ items: [] }))
       .mockResolvedValueOnce(
         Response.json({ ...issue, assignees: [], state: "closed" }),
       ),
