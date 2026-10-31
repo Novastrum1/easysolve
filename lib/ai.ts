@@ -78,12 +78,13 @@ export async function ai(
           ) +
           512 +
           max;
-        if ((usage._sum.total ?? 0) + reserve > planLimits(u).tokens)
+        const runScoped = !!runId;
+        if (!runScoped && (usage._sum.total ?? 0) + reserve > planLimits(u).tokens)
           throw new AllowanceError(
             "Plan token allowance exhausted; queued until next reset",
             nextMonth(),
           );
-        if ((cycle._sum.total ?? 0) + reserve > config.monthlyTokens)
+        if (!runScoped && (cycle._sum.total ?? 0) + reserve > config.monthlyTokens)
           throw new AllowanceError(
             "Token allowance exhausted; queued until configured reset",
             window.reset,
@@ -103,23 +104,6 @@ export async function ai(
             413,
             "AI request exceeds the configured input limit. Narrow the context.",
           );
-        if (runId) {
-          const jobUsage = await tx.usage.aggregate({
-            where: { userId, runId },
-            _sum: { total: true },
-            _count: true,
-          });
-          if (
-            (jobUsage._sum.total ?? 0) + reserve >
-              limit("AI_JOB_MAX_TOKENS", 500000) ||
-            (await tx.aIRequest.count({ where: { userId, runId } })) >=
-              limit("AI_JOB_MAX_REQUESTS", 18)
-          )
-            throw new HttpError(
-              422,
-              "AI job budget exhausted. Review the run and narrow its scope before retrying.",
-            );
-        }
         // Durable attempts include rejected/interrupted requests; usage rows remain actual receipts only.
         await db.aIRequest.create({ data: { userId, runId } });
         const response = await generateAI({
