@@ -1004,7 +1004,7 @@ export function RunPage(c: Context & { runId: string }) {
         >
           <p>
             {confirm === "approve"
-              ? "This creates a GitHub commit, branch, and draft pull request from the exact patch you reviewed. If you lack write access, EasySolve creates or uses your GitHub fork."
+              ? "This validates and submits a normal GitHub pull request from the exact patch you reviewed. If you lack write access, EasySolve creates or uses your GitHub fork."
               : confirm === "changes"
                 ? "The agent will inspect and rebuild the patch. The current approval will be cleared."
                 : confirm === "cancel"

@@ -352,7 +352,7 @@ export function SettingsPage(c: Context) {
             [
               "automatic",
               "Publish explicitly started runs",
-              "Default. Explicitly started runs create a draft pull request automatically.",
+              "Default. Explicitly started runs validate the patch and submit a normal pull request automatically.",
             ],
             [
               "plan",

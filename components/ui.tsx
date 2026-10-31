@@ -9,7 +9,10 @@ import {
 } from "lucide-react";
 import { cloneElement, isValidElement, useEffect, useId, useRef } from "react";
 export const label = (s: string) =>
-  s.replaceAll("_", " ").replace(/^./, (c) => c.toUpperCase());
+  ({
+    awaiting_review: "Awaiting publication approval",
+    published: "Submitted for review",
+  }[s] ?? s.replaceAll("_", " ").replace(/^./, (c) => c.toUpperCase()));
 export function Badge({ status }: { status: string }) {
   return (
     <span

@@ -323,7 +323,8 @@ it("publishes via a verified contributor fork when upstream write access is abse
       approvedSha: fingerprint,
       artifacts: files,
       plan: "Fix sum",
-      tests: "Not run",
+      diff: "diff",
+      tests: '{"exitCode":0,"stdout":"pass","stderr":""}',
     },
   });
   let forked = false;
@@ -362,7 +363,11 @@ it("publishes via a verified contributor fork when upstream write access is abse
   expect(gh.request).toHaveBeenCalledWith(
     "/repos/test/project/pulls",
     "POST",
-    expect.objectContaining({ head: `contributor:${run.branch}`, draft: true }),
+    expect.objectContaining({
+      head: `contributor:${run.branch}`,
+      draft: false,
+      body: expect.stringContaining("## Validation"),
+    }),
   );
   expect(gh.request).toHaveBeenCalledWith(
     "/repos/contributor/project/git/commits",
@@ -417,6 +422,89 @@ it("cancels durable work and can requeue failed publication without inventing su
   );
 });
 
+it("blocks incomplete work before any GitHub publication write", async () => {
+  const i = await issue();
+  const [run] = await startRuns(userId, [i.id]);
+  const files = { "sum.js": "fixed" };
+  const { patchHash } = await import("../lib/security");
+  const sha = patchHash(files);
+  await db.run.update({
+    where: { id: run.id },
+    data: {
+      status: "awaiting_review",
+      artifacts: files,
+      diff: "diff",
+      baseSha: "base",
+      headSha: sha,
+      approvedSha: sha,
+      tests: "No test command was executed.",
+    },
+  });
+  await expect(publish(userId, run.id)).rejects.toThrow("Validation is incomplete");
+  expect(gh.request).not.toHaveBeenCalled();
+  expect(
+    (await db.run.findUniqueOrThrow({ where: { id: run.id } })).status,
+  ).toBe("awaiting_review");
+});
+
+it("promotes only a validated same-run draft without creating a duplicate", async () => {
+  const i = await issue();
+  const [run] = await startRuns(userId, [i.id]);
+  const files = { "sum.js": "fixed" };
+  const { patchHash } = await import("../lib/security");
+  const sha = patchHash(files);
+  await db.run.update({
+    where: { id: run.id },
+    data: {
+      status: "awaiting_review",
+      artifacts: files,
+      diff: "diff",
+      baseSha: "base",
+      headSha: sha,
+      approvedSha: sha,
+      tests: '{"exitCode":0,"stdout":"pass","stderr":""}',
+    },
+  });
+  gh.request.mockImplementation(async (path: string, method?: string) => {
+    if (path === "/user") return { id: 7, login: "contributor" };
+    if (path === "/repos/test/project")
+      return { default_branch: "main", permissions: { push: true } };
+    if (path.includes("/pulls?head="))
+      return [
+        {
+          number: 51,
+          draft: true,
+          body: `Validated patch\n<!-- run:${run.id} -->`,
+          head: { sha: "existing" },
+          html_url: "https://github.com/test/project/pull/51",
+        },
+      ];
+    if (path.endsWith("/git/commits/base")) return { tree: { sha: "base-tree" } };
+    if (path.endsWith("/git/trees")) return { sha: "approved-tree" };
+    if (path.includes("/git/ref/heads/")) return { object: { sha: "existing" } };
+    if (path.endsWith("/git/commits/existing"))
+      return {
+        tree: { sha: "approved-tree" },
+        parents: [{ sha: "base" }],
+        message: run.title,
+      };
+    if (path === "/repos/test/project/pulls/51" && method === "PATCH")
+      return { draft: false };
+    throw Error(path);
+  });
+  await publish(userId, run.id);
+  expect(gh.request).toHaveBeenCalledWith(
+    "/repos/test/project/pulls/51",
+    "PATCH",
+    { draft: false },
+  );
+  expect(
+    gh.request.mock.calls.some(
+      ([path, method]) => path === "/repos/test/project/pulls" && method === "POST",
+    ),
+  ).toBe(false);
+});
+
 it("validates an existing PR against the approved patch before recovering publication", async () => {
   const i = await issue();
   const [run] = await startRuns(userId, [i.id]);
@@ -431,6 +519,8 @@ it("validates an existing PR against the approved patch before recovering public
       baseSha: "base",
       headSha: sha,
       approvedSha: sha,
+      diff: "diff",
+      tests: '{"exitCode":0,"stdout":"pass","stderr":""}',
     },
   });
   let matching = false;

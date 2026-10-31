@@ -92,7 +92,11 @@ export function reviewCategory(
   if ([...latest.values()].includes("CHANGES_REQUESTED"))
     return "changes_requested";
   if ([...latest.values()].includes("APPROVED"))
-    return pr.mergeable === true && checks === "success" ? "ready" : "approved";
+    return pr.mergeable === true &&
+      ["clean", "has_hooks"].includes(pr.mergeable_state ?? "") &&
+      checks === "success"
+      ? "ready"
+      : "approved";
   return "needs_review";
 }
 

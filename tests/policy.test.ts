@@ -67,12 +67,23 @@ describe("workflow policies", () => {
     expect(reviewCategory({ mergeable: true }, reviews, "sha", "pending")).toBe(
       "approved",
     );
+    expect(
+      reviewCategory(
+        { mergeable: true, mergeable_state: "clean" },
+        reviews,
+        "sha",
+        "success",
+      ),
+    ).toBe("ready");
     expect(reviewCategory({ mergeable: true }, reviews, "sha", "success")).toBe(
-      "ready",
+      "approved",
     );
     expect(
       reviewCategory({ mergeable: false }, reviews, "sha", "success"),
     ).toBe("blocked");
+    expect(reviewCategory({ mergeable: true }, reviews, "sha", "failure")).toBe(
+      "blocked",
+    );
     expect(
       reviewCategory(
         { mergeable: true },
@@ -96,9 +107,14 @@ it("does not let comments overwrite approvals or protections appear ready", () =
     { user: { login: "a" }, state: "APPROVED", commit_id: "sha" },
     { user: { login: "a" }, state: "COMMENTED", commit_id: "sha" },
   ];
-  expect(reviewCategory({ mergeable: true }, reviews, "sha", "success")).toBe(
-    "ready",
-  );
+  expect(
+    reviewCategory(
+      { mergeable: true, mergeable_state: "clean" },
+      reviews,
+      "sha",
+      "success",
+    ),
+  ).toBe("ready");
   expect(
     reviewCategory(
       { mergeable: true, mergeable_state: "blocked" },
