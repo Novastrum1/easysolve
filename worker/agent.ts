@@ -1,6 +1,5 @@
 import { reserveRun, releaseRun } from "../lib/entitlements";
 import { z } from "zod";
-import { zodTextFormat } from "openai/helpers/zod";
 import { ai } from "../lib/ai";
 import { db } from "../lib/db";
 import { github } from "../lib/github";
@@ -14,6 +13,32 @@ const responseSchema = z.object({
   command: z.string().max(2000).nullable().optional(),
   summary: z.string().nullable().optional(),
 });
+// DeepSeek supports JSON schema validation, but the OpenAI Zod helper marks
+// every object property as required in strict mode, including optional ones.
+// Only plan/action are required for every step; the other fields depend on the
+// selected action.
+const agentOutputFormat = {
+  type: "json_schema" as const,
+  name: "agent_action",
+  strict: true,
+  schema: {
+    type: "object",
+    properties: {
+      plan: { type: "string" },
+      action: { type: "string", enum: ["read", "write", "test", "finish"] },
+      path: { type: ["string", "null"] },
+      content: {
+        anyOf: [{ type: "string", maxLength: 200000 }, { type: "null" }],
+      },
+      command: {
+        anyOf: [{ type: "string", maxLength: 2000 }, { type: "null" }],
+      },
+      summary: { type: ["string", "null"] },
+    },
+    required: ["plan", "action"],
+    additionalProperties: false,
+  },
+};
 function parseAgentResponse(raw: string) {
   const text = raw
     .trim()
@@ -146,7 +171,7 @@ export async function executeRun(userId: string, id: string) {
         instruction,
         id,
         undefined,
-        zodTextFormat(responseSchema, "agent_action"),
+        agentOutputFormat,
       );
       const action = parseAgentResponse(raw);
       plan = action.plan;
@@ -278,21 +303,35 @@ async function publishLocked(userId: string, id: string) {
     const account = await gh.request("/user");
     headOwner = account.login;
     targetRepo = `${account.login}/${run.repo.split("/")[1]}`;
-    let fork;
-    try {
-      fork = await gh.request(`/repos/${targetRepo}`);
-    } catch (e) {
-      if (!(e instanceof Error) || !e.message.includes("404")) throw e;
-      fork = await gh.request(`/repos/${run.repo}/forks`, "POST", {
-        default_branch_only: true,
-      });
+    let requestedFork = false;
+    let fork: any = null;
+    const forkReady = (candidate: any) =>
+      candidate?.parent?.full_name === run.repo ||
+      candidate?.source?.full_name === run.repo;
+    for (let attempt = 0; attempt < 6; attempt++) {
+      try {
+        fork = await gh.request(`/repos/${targetRepo}`);
+      } catch (e) {
+        if (!(e instanceof Error) || !e.message.includes("404")) throw e;
+        if (!requestedFork) {
+          await gh.request(`/repos/${run.repo}/forks`, "POST", {
+            default_branch_only: true,
+          });
+          requestedFork = true;
+        }
+        fork = null;
+      }
+      if (forkReady(fork)) break;
+      if (fork?.parent?.full_name || fork?.source?.full_name)
+        throw Error(
+          "Fork identity is not ready or belongs to a different repository. Retry publication after GitHub finishes creating the fork.",
+        );
+      if (attempt < 5)
+        await new Promise((resolve) => setTimeout(resolve, 250 * 2 ** attempt));
     }
-    if (
-      fork.parent?.full_name !== run.repo &&
-      fork.source?.full_name !== run.repo
-    )
+    if (!forkReady(fork))
       throw Error(
-        "Fork identity is not ready or belongs to a different repository. Retry publication after GitHub finishes creating the fork.",
+        "Fork identity is not ready or belongs to a different repository. GitHub did not finish creating the fork in time; retry publication.",
       );
   }
   const existing = await gh.request(
