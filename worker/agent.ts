@@ -297,12 +297,12 @@ async function publishLocked(userId: string, id: string) {
     throw Error("Persisted patch revision does not match approval");
   const gh = await github(userId, run.identityId);
   const repository = await gh.request(`/repos/${run.repo}`);
+  const githubUser = await gh.request("/user");
   let targetRepo = run.repo;
   let headOwner = run.repo.split("/")[0];
   if (repository.permissions?.push !== true) {
-    const account = await gh.request("/user");
-    headOwner = account.login;
-    targetRepo = `${account.login}/${run.repo.split("/")[1]}`;
+    headOwner = githubUser.login;
+    targetRepo = `${githubUser.login}/${run.repo.split("/")[1]}`;
     let requestedFork = false;
     let fork: any = null;
     const forkReady = (candidate: any) =>
@@ -366,15 +366,19 @@ async function publishLocked(userId: string, id: string) {
         "Existing PR branch is unavailable. Inspect it on GitHub before retrying.",
       );
     const author = {
-      name: "EasySolve",
-      email: "easysolve@users.noreply.github.com",
+      name: githubUser.name?.trim() || githubUser.login,
+      email:
+        githubUser.email?.trim() ||
+        (githubUser.id
+          ? `${githubUser.id}+${githubUser.login}@users.noreply.github.com`
+          : `${githubUser.login}@users.noreply.github.com`),
       date: run.createdAt.toISOString(),
     };
     const commit = await gh.request(
       `/repos/${targetRepo}/git/commits`,
       "POST",
       {
-        message: `EasySolve: ${run.title}\n\nRun: ${id}`,
+        message: run.title,
         tree: tree.sha,
         parents: [run.baseSha],
         author,
@@ -392,7 +396,7 @@ async function publishLocked(userId: string, id: string) {
     if (
       expected.tree.sha !== tree.sha ||
       expected.parents[0]?.sha !== run.baseSha ||
-      expected.message !== `EasySolve: ${run.title}\n\nRun: ${id}`
+      expected.message !== run.title
     )
       throw Error("Branch changed externally. Refusing to publish.");
   }
@@ -419,7 +423,7 @@ async function publishLocked(userId: string, id: string) {
     title: run.title.slice(0, 240),
     head: targetRepo === run.repo ? run.branch : `${headOwner}:${run.branch}`,
     base: repository.default_branch,
-    body: `## EasySolve\n${run.plan}\n\n${issues.map((i) => `Closes #${i.number}`).join("\n")}\n\n## Actual test output\n\`\`\`\n${run.tests.slice(0, 30000)}\n\`\`\``,
+    body: `${run.plan}\n\n${issues.map((i) => `Closes #${i.number}`).join("\n")}\n\n## Test output\n\`\`\`\n${run.tests.slice(0, 30000)}\n\`\`\``,
     draft: true,
   });
   await db.run.update({

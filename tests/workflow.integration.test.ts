@@ -174,6 +174,10 @@ describe("durable issue → run → approval → PR workflow", () => {
   });
   it("saves actual patch and test output, blocks unapproved publication, publishes once", async () => {
     const i = await issue();
+    await db.user.update({
+      where: { id: userId },
+      data: { settings: { mode: "approval" } },
+    });
     const [run] = await startRuns(userId, [i.id]);
     model
       .mockResolvedValueOnce(
@@ -226,6 +230,7 @@ describe("durable issue → run → approval → PR workflow", () => {
     let commits = 0,
       prs = 0;
     gh.request.mockImplementation(async (path: string, method?: string) => {
+      if (path === "/user") return { id: 7, login: "contributor" };
       if (path.includes("/pulls?head="))
         return published
           ? [{ number: 7, html_url: "https://github.com/test/project/pull/7" }]
@@ -269,6 +274,7 @@ describe("durable issue → run → approval → PR workflow", () => {
     expect(saved.prNumber).toBe(7);
     expect(commits).toBe(1);
     expect(prs).toBe(1);
+    await db.user.update({ where: { id: userId }, data: { settings: {} } });
   });
   it("rejects stale approval and cancellation before sandbox creation", async () => {
     const i = await issue();
@@ -429,6 +435,7 @@ it("validates an existing PR against the approved patch before recovering public
   });
   let matching = false;
   gh.request.mockImplementation(async (path: string, method?: string) => {
+    if (path === "/user") return { id: 7, login: "contributor" };
     if (path === "/repos/test/project")
       return { default_branch: "main", permissions: { push: true } };
     if (path.includes("/pulls?head="))
@@ -448,7 +455,7 @@ it("validates an existing PR against the approved patch before recovering public
       return {
         tree: { sha: matching ? "approved-tree" : "different-tree" },
         parents: [{ sha: "base" }],
-        message: `EasySolve: ${run.title}\n\nRun: ${run.id}`,
+        message: run.title,
       };
     throw Error(path);
   });

@@ -81,7 +81,7 @@ export async function startRuns(userId: string, ids: string[]) {
           repo: batch[0].repo,
           issueIds: batch.map((i) => i.id),
           title: batch.map((i) => `#${i.number} ${i.title}`).join(" · "),
-          branch: `easysolve/${crypto.randomUUID()}`,
+          branch: `fix/${crypto.randomUUID()}`,
           mode: config.mode,
         },
       });
