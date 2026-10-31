@@ -42,7 +42,8 @@ export function AccountEntitlements(c: Context) {
                 )
               }
             />
-            {i.login} · {i.active ? "connected" : "disconnected"}
+            {i.login} · {i.active ? "active" : "inactive"} ·{" "}
+            {i.usable ? "usable for sync" : "not usable for sync"}
           </label>
         ))}
       </fieldset>

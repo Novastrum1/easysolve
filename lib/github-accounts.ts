@@ -33,6 +33,8 @@ export async function connectGithubAccount(
           token: encrypt(token),
           login: account.login,
           githubAccountId: stableId,
+          active: true,
+          usable: existing.usable || s.usable < s.githubLimit,
           status: "connected",
         },
       });
