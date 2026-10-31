@@ -9,10 +9,10 @@ import { Sandbox } from "./sandbox";
 const responseSchema = z.object({
   plan: z.string(),
   action: z.enum(["read", "write", "test", "finish"]),
-  path: z.string().nullable().default(null),
-  content: z.string().max(200000).nullable().default(null),
-  command: z.string().max(2000).nullable().default(null),
-  summary: z.string().nullable().default(null),
+  path: z.string().nullable().optional(),
+  content: z.string().max(200000).nullable().optional(),
+  command: z.string().max(2000).nullable().optional(),
+  summary: z.string().nullable().optional(),
 });
 function parseAgentResponse(raw: string) {
   const text = raw
@@ -21,9 +21,16 @@ function parseAgentResponse(raw: string) {
     .replace(/\s*```$/i, "");
   const start = text.indexOf("{");
   const end = text.lastIndexOf("}");
-  return responseSchema.parse(
+  const parsed = responseSchema.parse(
     JSON.parse(start >= 0 && end > start ? text.slice(start, end + 1) : text),
   );
+  return {
+    ...parsed,
+    path: parsed.path ?? null,
+    content: parsed.content ?? null,
+    command: parsed.command ?? null,
+    summary: parsed.summary ?? null,
+  };
 }
 export async function executeRun(userId: string, id: string) {
   const account = await db.user.findUniqueOrThrow({ where: { id: userId } });
