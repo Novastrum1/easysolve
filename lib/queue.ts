@@ -112,13 +112,33 @@ export async function startRuns(userId: string, ids: string[]) {
 export async function claimJob() {
   return db.$transaction(async (tx) => {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('easysolve:claim'))`;
+    const globalLimit = Math.max(
+      1,
+      Number(process.env.WORKER_CONCURRENCY || 10),
+    );
+    const accountLimit = Math.max(
+      1,
+      Number(process.env.WORKER_ACCOUNT_CONCURRENCY || 10),
+    );
     const active = await tx.job.count({
       where: { status: "running", leaseUntil: { gt: new Date() } },
     });
-    if (active >= Number(process.env.WORKER_CONCURRENCY || 1)) return null;
-    const jobs = await tx.$queryRaw<
-      { id: string }[]
-    >`SELECT j.id FROM "Job" j JOIN "User" u ON u.id=j."userId" WHERE u."suspendedAt" IS NULL AND ((j.status='queued' AND j."availableAt"<=NOW()) OR (j.status='running' AND j."leaseUntil"<NOW())) ORDER BY j."createdAt" FOR UPDATE OF j SKIP LOCKED LIMIT 1`;
+    if (active >= globalLimit) return null;
+    const jobs = await tx.$queryRaw<{ id: string }[]>`SELECT j.id
+       FROM "Job" j
+       JOIN "User" u ON u.id=j."userId"
+       WHERE u."suspendedAt" IS NULL
+         AND ((j.status='queued' AND j."availableAt"<=NOW()) OR (j.status='running' AND j."leaseUntil"<NOW()))
+         AND (
+           SELECT COUNT(*)
+           FROM "Job" active_job
+           WHERE active_job."userId" = j."userId"
+             AND active_job.status = 'running'
+             AND active_job."leaseUntil" > NOW()
+         ) < ${accountLimit}
+       ORDER BY j."createdAt"
+       FOR UPDATE OF j SKIP LOCKED
+       LIMIT 1`;
     if (!jobs.length) return null;
     return tx.job.update({
       where: { id: jobs[0].id },

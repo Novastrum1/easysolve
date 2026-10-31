@@ -67,8 +67,10 @@ async function tick() {
 async function main() {
   await recordProviderRuntime("worker");
   let last = 0;
+  const concurrency = Math.max(1, Number(process.env.WORKER_CONCURRENCY || 10));
+  const active = new Set<Promise<void>>();
   console.log(
-    "EasySolve worker online; PostgreSQL durable queue, concurrency=1",
+    `EasySolve worker online; PostgreSQL durable queue, concurrency=${concurrency}`,
   );
   while (!stopped) {
     try {
@@ -76,105 +78,113 @@ async function main() {
         await tick();
         last = Date.now();
       }
-      const job = await claimJob();
-      if (!job) {
+      while (!stopped && active.size < concurrency) {
+        const job = await claimJob();
+        if (!job) break;
+        const task = processJob(job).finally(() => active.delete(task));
+        active.add(task);
+      }
+      if (!active.size) {
         await new Promise((r) => setTimeout(r, 1500));
         continue;
       }
-      const heartbeat = setInterval(() => {
-        void db.job
-          .updateMany({
-            where: { id: job.id, status: "running", attempts: job.attempts },
-            data: { leaseUntil: new Date(Date.now() + 120000) },
-          })
-          .catch(() => {});
-      }, 30000);
-      try {
-        const account = await db.user.findUniqueOrThrow({
-          where: { id: job.userId },
-        });
-        if (account.suspendedAt) throw new Error("Account suspended");
-        const p = job.payload as {
-          runId: string;
-          identityId: string;
-          repositoryId: string;
-        };
-        if (job.kind === "run") await executeRun(job.userId, p.runId);
-        else if (job.kind === "publish") await publish(job.userId, p.runId);
-        else if (job.kind === "repository_sync")
-          await syncRepositoryStats(job.userId, p.repositoryId);
-        else if (job.kind === "sync")
-          await syncIssues(job.userId, p.identityId);
-        else throw Error("Unknown job kind");
-        await db.job.updateMany({
-          where: { id: job.id, status: "running", attempts: job.attempts },
-          data: { status: "completed", leaseUntil: null, error: null },
-        });
-      } catch (e) {
-        const current = await db.job.findUnique({ where: { id: job.id } });
-        if (current?.status !== "running" || current.attempts !== job.attempts)
-          continue;
-        const allowance = e instanceof AllowanceError;
-        await db.job.updateMany({
-          where: { id: job.id, status: "running", attempts: job.attempts },
-          data: {
-            status:
-              allowance ||
-              ((!(e instanceof AIProviderError) || e.retryable) &&
-                job.attempts < 3)
-                ? "queued"
-                : "failed",
-            leaseUntil: null,
-            availableAt: allowance
-              ? e.reset
-              : new Date(Date.now() + job.attempts * 30000),
-            error: allowance
-              ? "Allowance exhausted"
-              : e instanceof Error
-                ? e.message.slice(0, 2000)
-                : "Job failed",
-          },
-        });
-        if (allowance && job.kind === "run")
-          await db.run.updateMany({
-            where: {
-              id: (job.payload as any).runId,
-              userId: job.userId,
-              status: { not: "cancelled" },
-            },
-            data: { status: "queued", error: "Waiting for allowance reset" },
-          });
-        if (job.kind === "publish")
-          await db.run.updateMany({
-            where: {
-              id: (job.payload as { runId: string }).runId,
-              userId: job.userId,
-              status: "awaiting_review",
-            },
-            data: {
-              error:
-                e instanceof Error
-                  ? e.message.slice(0, 2000)
-                  : "Publication failed",
-            },
-          });
-        console.error(
-          "Job did not complete",
-          job.id,
-          allowance
-            ? "allowance exhausted"
-            : e instanceof Error
-              ? e.message.slice(0, 500)
-              : "failure",
-        );
-      } finally {
-        clearInterval(heartbeat);
-      }
+      await Promise.race(active);
     } catch {
       console.error("Worker database unavailable; retrying in 5 seconds");
       await new Promise((r) => setTimeout(r, 5000));
     }
   }
+  await Promise.allSettled(active);
   await db.$disconnect();
+}
+async function processJob(job: Awaited<ReturnType<typeof claimJob>>) {
+  if (!job) return;
+  const heartbeat = setInterval(() => {
+    void db.job
+      .updateMany({
+        where: { id: job.id, status: "running", attempts: job.attempts },
+        data: { leaseUntil: new Date(Date.now() + 120000) },
+      })
+      .catch(() => {});
+  }, 30000);
+  try {
+    const account = await db.user.findUniqueOrThrow({
+      where: { id: job.userId },
+    });
+    if (account.suspendedAt) throw new Error("Account suspended");
+    const p = job.payload as {
+      runId: string;
+      identityId: string;
+      repositoryId: string;
+    };
+    if (job.kind === "run") await executeRun(job.userId, p.runId);
+    else if (job.kind === "publish") await publish(job.userId, p.runId);
+    else if (job.kind === "repository_sync")
+      await syncRepositoryStats(job.userId, p.repositoryId);
+    else if (job.kind === "sync") await syncIssues(job.userId, p.identityId);
+    else throw Error("Unknown job kind");
+    await db.job.updateMany({
+      where: { id: job.id, status: "running", attempts: job.attempts },
+      data: { status: "completed", leaseUntil: null, error: null },
+    });
+  } catch (e) {
+    const current = await db.job.findUnique({ where: { id: job.id } });
+    if (current?.status !== "running" || current.attempts !== job.attempts)
+      return;
+    const allowance = e instanceof AllowanceError;
+    await db.job.updateMany({
+      where: { id: job.id, status: "running", attempts: job.attempts },
+      data: {
+        status:
+          allowance ||
+          ((!(e instanceof AIProviderError) || e.retryable) && job.attempts < 3)
+            ? "queued"
+            : "failed",
+        leaseUntil: null,
+        availableAt: allowance
+          ? e.reset
+          : new Date(Date.now() + job.attempts * 30000),
+        error: allowance
+          ? "Allowance exhausted"
+          : e instanceof Error
+            ? e.message.slice(0, 2000)
+            : "Job failed",
+      },
+    });
+    if (allowance && job.kind === "run")
+      await db.run.updateMany({
+        where: {
+          id: (job.payload as any).runId,
+          userId: job.userId,
+          status: { not: "cancelled" },
+        },
+        data: { status: "queued", error: "Waiting for allowance reset" },
+      });
+    if (job.kind === "publish")
+      await db.run.updateMany({
+        where: {
+          id: (job.payload as { runId: string }).runId,
+          userId: job.userId,
+          status: "awaiting_review",
+        },
+        data: {
+          error:
+            e instanceof Error
+              ? e.message.slice(0, 2000)
+              : "Publication failed",
+        },
+      });
+    console.error(
+      "Job did not complete",
+      job.id,
+      allowance
+        ? "allowance exhausted"
+        : e instanceof Error
+          ? e.message.slice(0, 500)
+          : "failure",
+    );
+  } finally {
+    clearInterval(heartbeat);
+  }
 }
 void main();

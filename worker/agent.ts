@@ -42,7 +42,8 @@ function parseAgentResponse(raw: string) {
       break;
     }
   }
-  if (end < 0) throw new SyntaxError("Agent response contained incomplete JSON");
+  if (end < 0)
+    throw new SyntaxError("Agent response contained incomplete JSON");
   const parsed = responseSchema.parse(JSON.parse(text.slice(start, end + 1)));
   return {
     ...parsed,
@@ -187,7 +188,8 @@ export async function executeRun(userId: string, id: string) {
       plan = "",
       finished = false,
       validationPassed = false;
-    for (let step = 0; step < 18; step++) {
+    const maxSteps = Math.max(18, Number(process.env.AGENT_MAX_STEPS || 36));
+    for (let step = 0; step < maxSteps; step++) {
       if (Date.now() > deadline) throw Error("Run exceeded execution timeout");
       const current = await db.run.findFirstOrThrow({ where: { id, userId } });
       if (current.status === "cancelled") throw Error("Run cancelled");
@@ -214,9 +216,11 @@ export async function executeRun(userId: string, id: string) {
             attempt === 0 &&
             (error instanceof z.ZodError ||
               error instanceof SyntaxError ||
-              ["AI_INVALID_OUTPUT", "AI_INCOMPLETE", "AI_EMPTY_OUTPUT"].includes(
-                code ?? "",
-              ))
+              [
+                "AI_INVALID_OUTPUT",
+                "AI_INCOMPLETE",
+                "AI_EMPTY_OUTPUT",
+              ].includes(code ?? ""))
           )
             continue;
           throw error;
@@ -264,7 +268,8 @@ export async function executeRun(userId: string, id: string) {
       transcript.push(JSON.stringify(action), result);
       await log(result.slice(0, 4000));
     }
-    if (!finished) throw Error("Agent reached bounded step limit (18)");
+    if (!finished)
+      throw Error(`Agent reached bounded step limit (${maxSteps})`);
     if (!Object.keys(changed).length)
       throw Error("Agent finished without a patch");
     if (!validationPassed)
@@ -368,7 +373,10 @@ async function publishLocked(userId: string, id: string) {
     const forkReady = (candidate: any) =>
       candidate?.parent?.full_name === run.repo ||
       candidate?.source?.full_name === run.repo;
-    const waitForFork = async (initialRepo: string, body: Record<string, string | boolean>) => {
+    const waitForFork = async (
+      initialRepo: string,
+      body: Record<string, string | boolean>,
+    ) => {
       let candidateRepo = initialRepo;
       let requestedFork = false;
       let fork: any = null;
@@ -380,11 +388,18 @@ async function publishLocked(userId: string, id: string) {
           if (!requestedFork) {
             let created: any;
             try {
-              created = await gh.request(`/repos/${run.repo}/forks`, "POST", body);
+              created = await gh.request(
+                `/repos/${run.repo}/forks`,
+                "POST",
+                body,
+              );
             } catch (createError) {
               // A concurrent fork request can win the race. Continue polling
               // the requested name rather than treating GitHub's 422 as fatal.
-              if (!(createError instanceof Error) || !createError.message.includes("422"))
+              if (
+                !(createError instanceof Error) ||
+                !createError.message.includes("422")
+              )
                 throw createError;
             }
             requestedFork = true;
@@ -397,7 +412,9 @@ async function publishLocked(userId: string, id: string) {
         // pending fork. Let the caller choose a unique, correctly linked fork.
         if (fork?.parent?.full_name || fork?.source?.full_name) return null;
         if (attempt < 5)
-          await new Promise((resolve) => setTimeout(resolve, 250 * 2 ** attempt));
+          await new Promise((resolve) =>
+            setTimeout(resolve, 250 * 2 ** attempt),
+          );
       }
       return null;
     };
@@ -525,8 +542,7 @@ async function publishLocked(userId: string, id: string) {
   });
   const problem = issues
     .map(
-      (i) =>
-        `- #${i.number}: ${i.title}\n\n${(i.body ?? "").slice(0, 4000)}`,
+      (i) => `- #${i.number}: ${i.title}\n\n${(i.body ?? "").slice(0, 4000)}`,
     )
     .join("\n");
   const description = [
