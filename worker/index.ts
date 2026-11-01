@@ -16,7 +16,8 @@ import { executeRun, publish } from "./agent";
 import { recordProviderRuntime } from "../lib/provider-runtime";
 import { HttpError } from "../lib/security";
 const workerId = process.env.WORKER_ID || "worker:" + process.pid;
-const workerVersion = process.env.RELEASE_VERSION || "unknown";
+const workerVersion =
+  process.env.RELEASE_VERSION || process.env.VERCEL_GIT_COMMIT_SHA || "unknown";
 async function heartbeat(activeJobs: number) {
   await db.workerHeartbeat.upsert({
     where: { id: workerId },
