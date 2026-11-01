@@ -80,17 +80,18 @@ export function reviewCategory(
       ["APPROVED", "CHANGES_REQUESTED", "DISMISSED"].includes(r.state)
     )
       latest.set(r.user?.login ?? "", r.state);
+  if (pr.draft) return "draft";
+  if ([...latest.values()].includes("CHANGES_REQUESTED"))
+    return "changes_requested";
+  if (checks === "failure") return "ci_failing";
+  if (checks === "pending") return "ci_pending";
   if (
-    pr.draft ||
     pr.mergeable === false ||
     ["blocked", "behind", "dirty", "unstable"].includes(
       pr.mergeable_state ?? "",
-    ) ||
-    checks === "failure"
+    )
   )
     return "blocked";
-  if ([...latest.values()].includes("CHANGES_REQUESTED"))
-    return "changes_requested";
   if ([...latest.values()].includes("APPROVED"))
     return pr.mergeable === true &&
       ["clean", "has_hooks"].includes(pr.mergeable_state ?? "") &&

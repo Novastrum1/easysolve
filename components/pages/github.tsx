@@ -877,6 +877,9 @@ export function ReviewPage(c: Context) {
         {[
           ["needs_review", "Needs review"],
           ["changes_requested", "Changes requested"],
+          ["ci_pending", "CI pending"],
+          ["ci_failing", "CI failing"],
+          ["draft", "Draft"],
           ["approved", "Approved"],
           ["ready", "Ready to merge"],
           ["blocked", "Blocked"],

@@ -52,25 +52,32 @@ export async function github(userId: string, identityId: string) {
   return new GitHub(decrypt(i.token));
 }
 async function assignedIssues(gh: GitHub, login: string) {
-  const issues = await gh.pages("/issues?filter=assigned&state=all");
-  if (issues.length) return issues;
-
-  // Fine-grained tokens and organization visibility rules can occasionally
-  // return an empty global list even though the account can find its issues.
-  // Search is scoped to the authenticated account and gives us a reliable
-  // fallback without requiring a repository to be managed first.
-  const result = await gh.request<{ items?: any[] }>(
-    `/search/issues?q=${encodeURIComponent(`assignee:${login} is:issue`)}&per_page=100&page=1`,
-  );
-  return (result.items ?? []).map((issue: any) => ({
-    ...issue,
-    repository: {
-      full_name:
-        issue.repository?.full_name ??
-        issue.repository_url?.split("/repos/")[1] ??
-        "",
-    },
-  }));
+  // GitHub's global assigned feed can omit issues from organizations or
+  // repositories that a fine-grained token can otherwise read. Merge it with
+  // an assignee search instead of using search only as an empty-feed fallback.
+  const feed = await gh.pages("/issues?filter=assigned&state=all");
+  const search: any[] = [];
+  for (let page = 1; page <= 10; page++) {
+    const result = await gh.request<{ items?: any[] }>(
+      `/search/issues?q=${encodeURIComponent(`assignee:${login} is:issue`)}&per_page=100&page=${page}`,
+    );
+    const items = result.items ?? [];
+    search.push(...items);
+    if (items.length < 100) break;
+  }
+  const merged = new Map<string, any>();
+  for (const issue of [...feed, ...search]) {
+    const repo =
+      issue.repository?.full_name ??
+      issue.repository_url?.split("/repos/")[1] ??
+      "";
+    if (repo)
+      merged.set(`${repo}#${issue.number}`, {
+        ...issue,
+        repository: { full_name: repo },
+      });
+  }
+  return [...merged.values()];
 }
 export async function syncIssues(userId: string, identityId: string) {
   const gh = await github(userId, identityId);

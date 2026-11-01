@@ -69,17 +69,33 @@ export async function handleRepositories({
     });
     if (!identities.length)
       throw new HttpError(422, "Connect an active GitHub identity first");
-    const results: { identityId: string; count: number }[] = [];
-    for (const i of identities)
-      results.push({
-        identityId: i.id,
-        count: (await syncIssues(u.id, i.id)).count,
-      });
+    const results: {
+      identityId: string;
+      count: number;
+      error?: string;
+    }[] = [];
+    for (const i of identities) {
+      try {
+        results.push({
+          identityId: i.id,
+          count: (await syncIssues(u.id, i.id)).count,
+        });
+      } catch (error) {
+        // One expired token must not prevent the other connected GitHub
+        // accounts from contributing their assigned issues to this sync.
+        results.push({
+          identityId: i.id,
+          count: 0,
+          error: error instanceof Error ? error.message : "Sync failed",
+        });
+      }
+    }
     const count = results.reduce((total, result) => total + result.count, 0);
+    const failed = results.filter((result) => result.error);
     return json({
       count,
       identities: results,
-      message: `Synced ${count} assigned issue${count === 1 ? "" : "s"}.`,
+      message: `${count ? `Synced ${count} assigned issue${count === 1 ? "" : "s"}.` : "No assigned issues were synced."}${failed.length ? ` ${failed.length} GitHub account${failed.length === 1 ? " needs" : "s need"} attention; update its token in Account and sync again.` : ""}`,
     });
   }
   if (route === "discover") {

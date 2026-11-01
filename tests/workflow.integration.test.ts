@@ -258,6 +258,7 @@ describe("durable issue → run → approval → PR workflow", () => {
         prs++;
         return {
           number: 7,
+          draft: false,
           html_url: "https://github.com/test/project/pull/7",
         };
       }
@@ -274,6 +275,12 @@ describe("durable issue → run → approval → PR workflow", () => {
     expect(saved.prNumber).toBe(7);
     expect(commits).toBe(1);
     expect(prs).toBe(1);
+    expect(
+      gh.request.mock.calls.find(
+        ([path, method]) =>
+          path === "/repos/test/project/pulls" && method === "POST",
+      )?.[2],
+    ).toMatchObject({ draft: false });
     await db.user.update({ where: { id: userId }, data: { settings: {} } });
   });
   it("rejects stale approval and cancellation before sandbox creation", async () => {
@@ -440,7 +447,9 @@ it("blocks incomplete work before any GitHub publication write", async () => {
       tests: "No test command was executed.",
     },
   });
-  await expect(publish(userId, run.id)).rejects.toThrow("Validation is incomplete");
+  await expect(publish(userId, run.id)).rejects.toThrow(
+    "Validation is incomplete",
+  );
   expect(gh.request).not.toHaveBeenCalled();
   expect(
     (await db.run.findUniqueOrThrow({ where: { id: run.id } })).status,
@@ -479,9 +488,11 @@ it("promotes only a validated same-run draft without creating a duplicate", asyn
           html_url: "https://github.com/test/project/pull/51",
         },
       ];
-    if (path.endsWith("/git/commits/base")) return { tree: { sha: "base-tree" } };
+    if (path.endsWith("/git/commits/base"))
+      return { tree: { sha: "base-tree" } };
     if (path.endsWith("/git/trees")) return { sha: "approved-tree" };
-    if (path.includes("/git/ref/heads/")) return { object: { sha: "existing" } };
+    if (path.includes("/git/ref/heads/"))
+      return { object: { sha: "existing" } };
     if (path.endsWith("/git/commits/existing"))
       return {
         tree: { sha: "approved-tree" },
@@ -500,7 +511,8 @@ it("promotes only a validated same-run draft without creating a duplicate", asyn
   );
   expect(
     gh.request.mock.calls.some(
-      ([path, method]) => path === "/repos/test/project/pulls" && method === "POST",
+      ([path, method]) =>
+        path === "/repos/test/project/pulls" && method === "POST",
     ),
   ).toBe(false);
 });
@@ -532,6 +544,7 @@ it("validates an existing PR against the approved patch before recovering public
       return [
         {
           number: 9,
+          body: `Validated patch\n<!-- run:${run.id} -->`,
           head: { sha: "existing" },
           html_url: "https://github.com/test/project/pull/9",
         },

@@ -12,11 +12,15 @@ export const label = (s: string) =>
   ({
     awaiting_review: "Awaiting publication approval",
     published: "Submitted for review",
-  }[s] ?? s.replaceAll("_", " ").replace(/^./, (c) => c.toUpperCase()));
+    completed: "Merged",
+    ci_pending: "CI pending",
+    ci_failing: "CI failing",
+    changes_requested: "Changes requested",
+  })[s] ?? s.replaceAll("_", " ").replace(/^./, (c) => c.toUpperCase());
 export function Badge({ status }: { status: string }) {
   return (
     <span
-      className={`badge ${["verified", "connection_verified", "completed", "done", "connected", "approved", "ready", "applied", "success", "published"].includes(status) ? "green" : ["underpaid", "overpaid", "unmatched", "failed_verification", "expired", "connection_failed", "failed", "blocked", "needs_attention", "failure", "changes_requested"].includes(status) ? "red" : ["running", "in_progress", "queued", "awaiting_review", "pending"].includes(status) ? "amber" : ""}`}
+      className={`badge ${["verified", "connection_verified", "completed", "done", "connected", "approved", "ready", "applied", "success", "published"].includes(status) ? "green" : ["underpaid", "overpaid", "unmatched", "failed_verification", "expired", "connection_failed", "failed", "blocked", "needs_attention", "failure", "changes_requested", "ci_failing"].includes(status) ? "red" : ["running", "in_progress", "queued", "awaiting_review", "pending", "ci_pending", "draft"].includes(status) ? "amber" : ""}`}
     >
       <span />
       {label(status)}

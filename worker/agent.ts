@@ -251,6 +251,8 @@ export async function executeRun(userId: string, id: string) {
           files: { [action.path]: action.content },
         });
         changed[action.path] = action.content;
+        // A later edit invalidates an earlier check; validate the final patch.
+        validationPassed = false;
       } else if (action.action === "test" && action.command) {
         result = await sandbox.op({ type: "test", command: action.command });
         try {
@@ -455,6 +457,7 @@ async function publishLocked(userId: string, id: string) {
         content,
       })),
   });
+  const runMarker = `<!-- run:${id} -->`;
   let ref;
   let existingCommitMessage = "";
   try {
@@ -507,32 +510,38 @@ async function publishLocked(userId: string, id: string) {
       throw Error("Branch changed externally. Refusing to publish.");
     existingCommitMessage = expected.message;
   }
-  const runMarker = `<!-- run:${id} -->`;
   if (existing.length) {
-    if (existing[0].head.sha !== ref.object.sha)
+    const legacyRunCommit =
+      existingCommitMessage === `EasySolve: ${run.title}\n\nRun: ${id}`;
+    const candidate =
+      existing.find((pr: any) => pr.body?.includes(runMarker)) ??
+      (legacyRunCommit && existing.length === 1 ? existing[0] : undefined);
+    if (!candidate)
+      throw Error(
+        "An existing PR uses this branch but is not linked to this run; refusing to modify it.",
+      );
+    if (candidate.head.sha !== ref.object.sha)
       throw Error(
         "Existing PR head changed. Review it on GitHub before retrying.",
       );
-    if (existing[0].draft) {
-      const legacyRunCommit =
-        existingCommitMessage === `EasySolve: ${run.title}\n\nRun: ${id}`;
-      if (!existing[0].body?.includes(runMarker) && !legacyRunCommit)
-        throw Error(
-          "An existing draft uses this branch but is not linked to this run; refusing to modify it.",
-        );
-      await gh.request(
-        `/repos/${run.repo}/pulls/${existing[0].number}`,
+    if (candidate.draft) {
+      const promoted = await gh.request(
+        `/repos/${run.repo}/pulls/${candidate.number}`,
         "PATCH",
         { draft: false },
       );
+      if (promoted?.draft !== false)
+        throw Error(
+          "GitHub kept the linked pull request as a draft; publication was not completed.",
+        );
     }
     await db.run.update({
       where: { id },
       data: {
         status: "published",
         error: null,
-        prNumber: existing[0].number,
-        prUrl: existing[0].html_url,
+        prNumber: candidate.number,
+        prUrl: candidate.html_url,
       },
     });
     return;
@@ -574,6 +583,17 @@ async function publishLocked(userId: string, id: string) {
     body: description,
     draft: false,
   });
+  if (pr.draft === true) {
+    const promoted = await gh.request(
+      `/repos/${run.repo}/pulls/${pr.number}`,
+      "PATCH",
+      { draft: false },
+    );
+    if (promoted?.draft !== false)
+      throw Error(
+        "GitHub kept the submitted pull request as a draft; publication was not completed.",
+      );
+  }
   await db.run.update({
     where: { id },
     data: {

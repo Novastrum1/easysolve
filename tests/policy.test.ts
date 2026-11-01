@@ -65,7 +65,7 @@ describe("workflow policies", () => {
       { user: { login: "a" }, state: "APPROVED", commit_id: "sha" },
     ];
     expect(reviewCategory({ mergeable: true }, reviews, "sha", "pending")).toBe(
-      "approved",
+      "ci_pending",
     );
     expect(
       reviewCategory(
@@ -82,7 +82,7 @@ describe("workflow policies", () => {
       reviewCategory({ mergeable: false }, reviews, "sha", "success"),
     ).toBe("blocked");
     expect(reviewCategory({ mergeable: true }, reviews, "sha", "failure")).toBe(
-      "blocked",
+      "ci_failing",
     );
     expect(
       reviewCategory(
@@ -99,6 +99,9 @@ describe("workflow policies", () => {
         "success",
       ),
     ).toBe("changes_requested");
+    expect(
+      reviewCategory({ draft: true, mergeable: true }, [], "sha", "success"),
+    ).toBe("draft");
   });
 });
 

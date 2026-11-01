@@ -132,6 +132,35 @@ async function processJob(job: Awaited<ReturnType<typeof claimJob>>) {
     if (current?.status !== "running" || current.attempts !== job.attempts)
       return;
     const allowance = e instanceof AllowanceError;
+    if (e instanceof Error && /GitHub 401:/.test(e.message)) {
+      const payload = job.payload as {
+        runId?: string;
+        identityId?: string;
+        repositoryId?: string;
+      };
+      const identityId =
+        payload.identityId ??
+        (payload.runId
+          ? (
+              await db.run.findFirst({
+                where: { id: payload.runId, userId: job.userId },
+                select: { identityId: true },
+              })
+            )?.identityId
+          : payload.repositoryId
+            ? (
+                await db.repository.findFirst({
+                  where: { id: payload.repositoryId, userId: job.userId },
+                  select: { identityId: true },
+                })
+              )?.identityId
+            : undefined);
+      if (identityId)
+        await db.identity.updateMany({
+          where: { id: identityId, userId: job.userId },
+          data: { status: "needs_attention" },
+        });
+    }
     await db.job.updateMany({
       where: { id: job.id, status: "running", attempts: job.attempts },
       data: {
