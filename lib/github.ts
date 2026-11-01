@@ -69,7 +69,7 @@ export class GitHub {
       );
     if (waitMs) await new Promise((resolve) => setTimeout(resolve, waitMs));
   }
-  private async recordHeaders(response: Response) {
+  private async recordHeaders(response: Response, path: string) {
     if (!this.coordinationKey) return;
     const key = `github:${this.coordinationKey}`;
     const remainingHeader = response.headers.get("x-ratelimit-remaining");
@@ -128,7 +128,7 @@ export class GitHub {
         update: { resetAt, remaining },
       });
     }
-    if (pollIntervalSeconds !== null)
+    if (pollIntervalSeconds !== null && /^\/notifications(?:\/|$)/.test(path))
       await db.githubThrottle.upsert({
         where: { key },
         create: {
@@ -159,7 +159,7 @@ export class GitHub {
       cache: "no-store",
       signal: AbortSignal.timeout(30000),
     });
-    const headers = await this.recordHeaders(response);
+    const headers = await this.recordHeaders(response, path);
     if (!response.ok) {
       if (headers?.limited) {
         const retryAt = headers.retryAt ?? new Date(Date.now() + 60000);
