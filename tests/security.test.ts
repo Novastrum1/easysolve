@@ -2,6 +2,7 @@ import { beforeEach,expect,it,vi } from "vitest";
 import {
 csrf,
 decrypt,
+  diagnosticError,
 encrypt,
 publicError,
 safeEqual,
@@ -53,6 +54,14 @@ it("never returns internal errors or secrets", () => {
   });
   expect(safeEqual("a", "a")).toBe(true);
   expect(safeEqual("a", "b")).toBe(false);
+});
+it("redacts secret-shaped values from correlation diagnostics", () => {
+  expect(
+    diagnosticError(new Error("database password=private token=github_pat_secret")),
+  ).toEqual({
+    name: "Error",
+    message: "database password=[REDACTED] token=[REDACTED]",
+  });
 });
 
 it("accepts Codespaces origin rewriting only for the configured host and same-origin browser requests", () => {

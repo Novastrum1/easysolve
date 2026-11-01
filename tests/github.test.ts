@@ -1,4 +1,4 @@
-import { afterEach,expect,it,vi } from "vitest";
+import { afterEach, expect, it, vi } from "vitest";
 import { GitHub } from "../lib/github";
 vi.mock("../lib/db", () => ({ db: {} }));
 vi.mock("next/headers", () => ({ cookies: vi.fn() }));
@@ -9,7 +9,7 @@ it("uses server credentials and propagates permission failures without leaking c
     .mockResolvedValue(new Response('{"message":"secret"}', { status: 403 }));
   vi.stubGlobal("fetch", fetch);
   await expect(new GitHub("private").request("/user")).rejects.toThrow(
-    "permission or rate limit denied",
+    "permission denied",
   );
   expect(fetch.mock.calls[0][1].headers.Authorization).toBe("Bearer private");
 });

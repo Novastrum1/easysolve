@@ -137,11 +137,28 @@ export async function rateLimit(key: string, limit = 30, windowSeconds = 60) {
     throw new HttpError(429, "Too many requests. Try again in a minute.");
 }
 export function publicError(e: unknown) {
+  if (e instanceof Error && "retryAt" in e && e.retryAt instanceof Date)
+    return {
+      status: 429,
+      error: e.message,
+      retryAt: e.retryAt.toISOString(),
+    };
   if (e instanceof HttpError) return { status: e.status, error: e.message };
   return {
     status: 500,
     error: "The operation could not be completed. Check server diagnostics.",
   };
+}
+export function diagnosticError(e: unknown) {
+  const name = e instanceof Error ? e.name : "UnknownError";
+  const raw = e instanceof Error ? e.message : "Non-error exception";
+  const message = raw
+    .slice(0, 1200)
+    .replace(
+      /(password|passwd|token|cookie|authorization|secret|api[_-]?key)(\s*[=:]\s*)[^\s,;]+/gi,
+      "$1$2[REDACTED]",
+    );
+  return { name, message };
 }
 
 export function patchHash(files: Record<string, string>) {

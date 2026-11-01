@@ -5,13 +5,139 @@ import {
 } from "./entitlements";
 import { db } from "./db";
 import { decrypt, HttpError } from "./security";
+export class GithubRateLimitError extends HttpError {
+  constructor(
+    message: string,
+    public retryAt: Date,
+  ) {
+    super(429, message);
+  }
+}
+export class GithubCredentialError extends HttpError {
+  constructor() {
+    super(
+      422,
+      "GitHub credential expired or invalid. Update or revoke the token, then retry.",
+    );
+  }
+}
 export class GitHub {
-  constructor(private token: string) {}
+  constructor(
+    private token: string,
+    private coordinationKey?: string,
+  ) {}
+  private async beforeRequest(method: string) {
+    if (!this.coordinationKey) return;
+    const key = `github:${this.coordinationKey}`;
+    const configuredInterval =
+      method === "GET"
+        ? Number(process.env.GITHUB_MIN_INTERVAL_MS || 250)
+        : Number(process.env.GITHUB_MIN_MUTATION_INTERVAL_MS || 1000);
+    const interval = Math.min(
+      5000,
+      Math.max(method === "GET" ? 100 : 1000, configuredInterval),
+    );
+    const waitMs = await db.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${key}))`;
+      const now = new Date();
+      const row = await tx.githubThrottle.findUnique({ where: { key } });
+      if (row?.blockedUntil && row.blockedUntil > now)
+        throw new GithubRateLimitError(
+          "GitHub temporarily limited EasySolve requests. Retry after the recorded reset time; do not switch identities to bypass the restriction.",
+          row.blockedUntil,
+        );
+      const wait = Math.max(
+        0,
+        (row?.nextAllowedAt?.getTime() ?? 0) - now.getTime(),
+      );
+      const nextAllowedAt = new Date(now.getTime() + wait + interval);
+      await tx.githubThrottle.upsert({
+        where: { key },
+        create: { key, nextAllowedAt },
+        update: { nextAllowedAt },
+      });
+      return wait;
+    });
+    if (waitMs) await new Promise((resolve) => setTimeout(resolve, waitMs));
+  }
+  private async recordHeaders(response: Response) {
+    if (!this.coordinationKey) return;
+    const key = `github:${this.coordinationKey}`;
+    const remainingHeader = response.headers.get("x-ratelimit-remaining");
+    const resetHeader = response.headers.get("x-ratelimit-reset");
+    const parsedRemaining =
+      remainingHeader === null ? NaN : Number(remainingHeader);
+    const remaining =
+      Number.isSafeInteger(parsedRemaining) && parsedRemaining >= 0
+        ? parsedRemaining
+        : null;
+    const resetAt =
+      resetHeader && /^\d+$/.test(resetHeader)
+        ? new Date(Number(resetHeader) * 1000)
+        : null;
+    const retryAfterHeader = response.headers.get("retry-after");
+    const retryAfterSeconds =
+      retryAfterHeader && /^\d+(?:\.\d+)?$/.test(retryAfterHeader)
+        ? Number(retryAfterHeader)
+        : null;
+    const pollIntervalHeader = response.headers.get("x-poll-interval");
+    const pollIntervalSeconds =
+      pollIntervalHeader && /^\d+$/.test(pollIntervalHeader)
+        ? Number(pollIntervalHeader)
+        : null;
+    const message = response.ok
+      ? ""
+      : await response
+          .clone()
+          .text()
+          .catch(() => "");
+    const abuse =
+      /secondary rate limit|abuse detection|temporarily blocked|rate limit/i.test(
+        message,
+      );
+    const limited =
+      response.status === 429 ||
+      ((response.status === 403 || response.status === 429) &&
+        (remaining === 0 || abuse));
+    let retryAt: Date | null = null;
+    if (remaining === 0 || limited) {
+      retryAt =
+        retryAfterSeconds !== null
+          ? new Date(Date.now() + Math.ceil(retryAfterSeconds * 1000))
+          : resetAt && resetAt > new Date()
+            ? resetAt
+            : new Date(Date.now() + (limited ? 60000 : 1000));
+      await db.githubThrottle.upsert({
+        where: { key },
+        create: { key, blockedUntil: retryAt, resetAt, remaining },
+        update: { blockedUntil: retryAt, resetAt, remaining },
+      });
+    } else if (remaining !== null || resetAt) {
+      await db.githubThrottle.upsert({
+        where: { key },
+        create: { key, resetAt, remaining },
+        update: { resetAt, remaining },
+      });
+    }
+    if (pollIntervalSeconds !== null)
+      await db.githubThrottle.upsert({
+        where: { key },
+        create: {
+          key,
+          nextAllowedAt: new Date(Date.now() + pollIntervalSeconds * 1000),
+        },
+        update: {
+          nextAllowedAt: new Date(Date.now() + pollIntervalSeconds * 1000),
+        },
+      });
+    return { limited, message, resetAt, retryAt };
+  }
   async request<T = any>(
     path: string,
     method = "GET",
     body?: unknown,
   ): Promise<T> {
+    await this.beforeRequest(method);
     const response = await fetch(`https://api.github.com${path}`, {
       method,
       headers: {
@@ -24,11 +150,22 @@ export class GitHub {
       cache: "no-store",
       signal: AbortSignal.timeout(30000),
     });
-    if (!response.ok)
+    const headers = await this.recordHeaders(response);
+    if (!response.ok) {
+      if (headers?.limited) {
+        const retryAt = headers.retryAt ?? new Date(Date.now() + 60000);
+        throw new GithubRateLimitError(
+          "GitHub rate limit or abuse protection is active. EasySolve stopped requests and will not retry automatically.",
+          retryAt,
+        );
+      }
+      const status = response.status;
+      if (status === 401) throw new GithubCredentialError();
       throw new HttpError(
-        response.status === 401 ? 422 : response.status === 403 ? 403 : 502,
-        `GitHub ${response.status}: ${response.status === 401 ? "credential expired or invalid" : response.status === 403 ? "permission or rate limit denied" : "request failed"}`,
+        status === 403 ? 403 : 502,
+        `GitHub ${status}: ${status === 403 ? "permission denied" : "request failed"}`,
       );
+    }
     if (response.status === 204) return undefined as T;
     return response.json();
   }
@@ -49,7 +186,7 @@ export class GitHub {
 }
 export async function github(userId: string, identityId: string) {
   const i = await assertIdentityAccess(userId, identityId);
-  return new GitHub(decrypt(i.token));
+  return new GitHub(decrypt(i.token), `user:${userId}`);
 }
 async function assignedIssues(gh: GitHub, login: string) {
   // GitHub's global assigned feed can omit issues from organizations or

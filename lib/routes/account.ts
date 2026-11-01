@@ -80,7 +80,7 @@ export async function handleAccount({
   }
   if (route === "identities" && method === "POST") {
     const token = z.string().min(20).max(300).parse(body.token);
-    const gh = new GitHub(token);
+    const gh = new GitHub(token, `user:${u.id}`);
     const account = await gh.request("/user");
     const identity = await connectGithubAccount(u.id, account, token);
     return json({

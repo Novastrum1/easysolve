@@ -12,11 +12,23 @@ import { handleRepositories } from "./routes/repositories";
 import { handleReviews } from "./routes/reviews";
 import { handleRuns } from "./routes/runs";
 import { handleAdmin } from "./routes/admin";
-import { csrf, HttpError, publicError, rateLimit, user } from "./security";
+import {
+  csrf,
+  diagnosticError,
+  HttpError,
+  publicError,
+  rateLimit,
+  user,
+} from "./security";
 const id = z.string().min(1).max(100);
 const json = (data: unknown, status = 200) =>
   NextResponse.json(data, { status });
 export async function api(request: Request, path: string[]) {
+  const requestId = crypto.randomUUID();
+  const withRequestId = <T extends Response>(response: T) => {
+    response.headers.set("X-Request-ID", requestId);
+    return response;
+  };
   try {
     const route = path.join("/");
     const method = request.method;
@@ -32,9 +44,9 @@ export async function api(request: Request, path: string[]) {
     if (method !== "GET") csrf(request);
     if (route === "health") {
       await db.$queryRaw`SELECT 1`;
-      return json({
+      return withRequestId(json({
         ok: true,
-      });
+      }));
     }
     const body =
       method === "GET"
@@ -51,7 +63,7 @@ export async function api(request: Request, path: string[]) {
               throw new HttpError(400, "Invalid JSON");
             });
     const authResult = await handleAuth({ request, path, body, url });
-    if (authResult) return authResult;
+    if (authResult) return withRequestId(authResult);
     const u = await user();
     await rateLimit(`user:${u.id}`, 120);
     const context = { request, path, body, url, u };
@@ -66,7 +78,7 @@ export async function api(request: Request, path: string[]) {
       handleReviews,
     ]) {
       const result = await handler(context);
-      if (result) return result;
+      if (result) return withRequestId(result);
     }
     throw new HttpError(404, "Endpoint not found");
   } catch (e) {
@@ -78,10 +90,19 @@ export async function api(request: Request, path: string[]) {
       return json({ error: e.message, reset: e.reset }, 429);
     const error = publicError(e);
     if (error.status === 500)
-      console.error(
-        "API operation failed",
-        e instanceof Error ? e.name : "unknown",
-      );
-    return json({ error: error.error }, error.status);
+      console.error("API operation failed", {
+        requestId,
+        method: request.method,
+        path: path.join("/"),
+        error: diagnosticError(e),
+      });
+    const response = json(
+      {
+        error: error.error,
+        ...(error.status === 500 ? { requestId } : {}),
+      },
+      error.status,
+    );
+    return withRequestId(response);
   }
 }

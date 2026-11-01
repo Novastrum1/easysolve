@@ -1,6 +1,7 @@
 import "dotenv/config";
-import { afterAll,beforeAll,expect,it,vi } from "vitest";
+import { afterAll, beforeAll, expect, it, vi } from "vitest";
 import { applyProposal } from "../lib/assignments";
+import { handleContribution } from "../lib/routes/contribution";
 import { db } from "../lib/db";
 const { gh } = vi.hoisted(() => ({ gh: { request: vi.fn(), pages: vi.fn() } }));
 vi.mock("../lib/github", () => ({ github: vi.fn().mockResolvedValue(gh) }));
@@ -78,4 +79,42 @@ it("rechecks assignments and reports partial failure honestly, retrying only fai
   await expect(applyProposal("different-user", proposal.id)).rejects.toThrow(
     "unavailable",
   );
+});
+
+it("claims an application before posting so concurrent retries cannot duplicate comments", async () => {
+  const application = await db.application.create({
+    data: {
+      userId,
+      identityId: "fixture",
+      repo: "a/b",
+      number: 3,
+      title: "Apply",
+      draft: "I can fix this.",
+    },
+  });
+  let releaseComments!: () => void;
+  gh.pages.mockImplementation(
+    () => new Promise((resolve) => (releaseComments = () => resolve([]))),
+  );
+  gh.request.mockImplementation(async (path: string, method?: string) =>
+    method === "POST"
+      ? { html_url: "https://github.com/a/b/issues/3#issuecomment-1" }
+      : { state: "open", assignees: [] },
+  );
+  const context = {
+    request: new Request("http://localhost/api/applications/post", {
+      method: "POST",
+    }),
+    path: ["applications", application.id, "post"],
+    body: { draft: "I can fix this." },
+    url: new URL("http://localhost/api/applications/post"),
+    u: await db.user.findUniqueOrThrow({ where: { id: userId } }),
+  } as any;
+  const first = handleContribution(context);
+  await new Promise((resolve) => setTimeout(resolve, 25));
+  const second = handleContribution(context);
+  await expect(second).rejects.toThrow("already in progress");
+  releaseComments();
+  await first;
+  expect(gh.request.mock.calls.filter((c) => c[1] === "POST")).toHaveLength(1);
 });

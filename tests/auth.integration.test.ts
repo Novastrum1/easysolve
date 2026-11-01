@@ -4,7 +4,7 @@ import { cookies } from "next/headers";
 import { afterAll, beforeAll, expect, it, vi } from "vitest";
 import { api } from "../lib/api";
 import { db } from "../lib/db";
-import { hash } from "../lib/security";
+import { hash, user as currentUser } from "../lib/security";
 vi.mock("next/headers", () => ({ cookies: vi.fn() }));
 const ids: string[] = [];
 const ratePrefix = `auth-integration-${crypto.randomUUID()}`;
@@ -63,6 +63,60 @@ it("authenticates an existing account with omitted or null signup-only fields wi
   expect(
     (await db.user.findUniqueOrThrow({ where: { id: ids[0] } })).password,
   ).toBe(originalHash);
+});
+it("keeps a valid session across requests, logs out explicitly, and does not delete it on backend failure", async () => {
+  expect((await call("login", { email, password: "eight123" })).status).toBe(
+    200,
+  );
+  const cookieValue = setCookie.mock.calls.find(
+    (call) => typeof call[1] === "string",
+  )?.[1] as string;
+  expect(cookieValue).toBeTruthy();
+  vi.mocked(cookies).mockResolvedValue({
+    get: () => ({ value: cookieValue }),
+    set: setCookie,
+    delete: vi.fn(),
+  } as any);
+  expect((await currentUser()).id).toBe(ids[0]);
+  const sessionCount = await db.session.count({ where: { userId: ids[0] } });
+  setCookie.mockClear();
+  const findUser = vi
+    .spyOn(db.user, "findUnique")
+    .mockRejectedValueOnce(new Error("fixture database unavailable"));
+  const failed = await call("login", { email, password: "newpass8" });
+  expect(failed.status).toBe(500);
+  const requestId = failed.headers.get("x-request-id");
+  expect(requestId).toMatch(/^[0-9a-f-]{36}$/);
+  expect((await failed.json()).requestId).toBe(requestId);
+  expect(setCookie).not.toHaveBeenCalled();
+  findUser.mockRestore();
+  const logout = await call("logout", {});
+  expect(logout.status).toBe(200);
+  expect(await db.session.count({ where: { userId: ids[0] } })).toBeLessThan(
+    sessionCount,
+  );
+});
+it("rejects an expired session without changing the cookie", async () => {
+  const expiredToken = `expired-${crypto.randomUUID()}`;
+  await db.session.create({
+    data: {
+      id: hash(expiredToken),
+      userId: ids[0],
+      expiresAt: new Date(Date.now() - 1000),
+    },
+  });
+  const remove = vi.fn();
+  vi.mocked(cookies).mockResolvedValue({
+    get: () => ({ value: expiredToken }),
+    set: setCookie,
+    delete: remove,
+  } as any);
+  const response = await api(
+    new Request(`${origin}/api/bootstrap`),
+    ["bootstrap"],
+  );
+  expect(response.status).toBe(401);
+  expect(remove).not.toHaveBeenCalled();
 });
 it("rejects missing/null/empty credentials with actionable field errors and no session", async () => {
   const sessions = await db.session.count({ where: { userId: ids[0] } });

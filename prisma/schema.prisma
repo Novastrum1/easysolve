@@ -222,6 +222,15 @@ model RateLimit {
  expiresAt DateTime
 }
 
+model GithubThrottle {
+ key String @id
+ nextAllowedAt DateTime?
+ blockedUntil DateTime?
+ resetAt DateTime?
+ remaining Int?
+ updatedAt DateTime @updatedAt
+}
+
 model ProviderConnection {
  id String @id
  fingerprint String

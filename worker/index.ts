@@ -4,7 +4,12 @@ import { reconcilePayments } from "../lib/billing";
 import { AIProviderError } from "../lib/providers/shared";
 import { AllowanceError } from "../lib/ai";
 import { db } from "../lib/db";
-import { syncIssues, syncRepositoryStats } from "../lib/github";
+import {
+  GithubCredentialError,
+  GithubRateLimitError,
+  syncIssues,
+  syncRepositoryStats,
+} from "../lib/github";
 import { settings } from "../lib/policy";
 import { claimJob, enqueue } from "../lib/queue";
 import { executeRun, publish } from "./agent";
@@ -132,7 +137,17 @@ async function processJob(job: Awaited<ReturnType<typeof claimJob>>) {
     if (current?.status !== "running" || current.attempts !== job.attempts)
       return;
     const allowance = e instanceof AllowanceError;
-    if (e instanceof Error && /GitHub 401:/.test(e.message)) {
+    const githubLimited = e instanceof GithubRateLimitError;
+    const githubCredential = e instanceof GithubCredentialError;
+    const retryableJob =
+      !githubLimited &&
+      !githubCredential &&
+      (allowance ||
+        ((!(e instanceof AIProviderError) || e.retryable) && job.attempts < 3));
+    if (
+      e instanceof GithubCredentialError ||
+      (e instanceof Error && /GitHub 401:/.test(e.message))
+    ) {
       const payload = job.payload as {
         runId?: string;
         identityId?: string;
@@ -175,22 +190,20 @@ async function processJob(job: Awaited<ReturnType<typeof claimJob>>) {
     await db.job.updateMany({
       where: { id: job.id, status: "running", attempts: job.attempts },
       data: {
-        status:
-          !blockedRun &&
-          (allowance ||
-            ((!(e instanceof AIProviderError) || e.retryable) &&
-              job.attempts < 3))
-            ? "queued"
-            : "failed",
+        status: !blockedRun && retryableJob ? "queued" : "failed",
         leaseUntil: null,
         availableAt: allowance
           ? e.reset
-          : new Date(Date.now() + job.attempts * 30000),
+          : githubLimited
+            ? e.retryAt
+            : new Date(Date.now() + job.attempts * 30000),
         error: allowance
           ? "Allowance exhausted"
-          : e instanceof Error
-            ? e.message.slice(0, 2000)
-            : "Job failed",
+          : githubLimited
+            ? e.message
+            : e instanceof Error
+              ? e.message.slice(0, 2000)
+              : "Job failed",
       },
     });
     if (allowance && job.kind === "run")

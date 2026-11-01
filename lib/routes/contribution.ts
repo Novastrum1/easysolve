@@ -183,26 +183,50 @@ export async function handleContribution({
     });
     if (!a) throw new HttpError(404, "Application not found");
     if (path[2] === "post") {
-      if (a.status === "posted")
-        throw new HttpError(409, "Comment already posted");
       const draft = z.string().min(1).max(20000).parse(body.draft);
-      const gh = await github(u.id, a.identityId);
-      const marker = `<!-- easysolve-application:${a.id} -->`;
-      const comments = await gh.pages(
-        `/repos/${a.repo}/issues/${a.number}/comments`,
-      );
-      let posted = comments.find((c) => c.body.includes(marker));
-      if (!posted)
-        posted = await gh.request(
-          `/repos/${a.repo}/issues/${a.number}/comments`,
-          "POST",
-          { body: `${draft}\n\n${marker}` },
-        );
-      await db.application.update({
-        where: { id: a.id },
-        data: { status: "posted", draft },
+      const claimed = await db.$transaction(async (tx) => {
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`application-post:${a.id}`}))`;
+        const current = await tx.application.findFirstOrThrow({
+          where: { id: a.id, userId: u.id },
+        });
+        if (current.status === "posted")
+          throw new HttpError(409, "Comment already posted");
+        if (current.status === "posting")
+          throw new HttpError(
+            409,
+            "Comment publication is already in progress",
+          );
+        await tx.application.update({
+          where: { id: a.id },
+          data: { status: "posting", draft },
+        });
+        return current;
       });
-      return json({ url: posted.html_url });
+      try {
+        const gh = await github(u.id, claimed.identityId);
+        const marker = `<!-- easysolve-application:${claimed.id} -->`;
+        const comments = await gh.pages(
+          `/repos/${claimed.repo}/issues/${claimed.number}/comments`,
+        );
+        let posted = comments.find((c) => c.body.includes(marker));
+        if (!posted)
+          posted = await gh.request(
+            `/repos/${claimed.repo}/issues/${claimed.number}/comments`,
+            "POST",
+            { body: `${draft}\n\n${marker}` },
+          );
+        await db.application.update({
+          where: { id: claimed.id },
+          data: { status: "posted", draft },
+        });
+        return json({ url: posted.html_url });
+      } catch (error) {
+        await db.application.updateMany({
+          where: { id: claimed.id, userId: u.id, status: "posting" },
+          data: { status: "pending" },
+        });
+        throw error;
+      }
     }
     const input = z
       .object({
