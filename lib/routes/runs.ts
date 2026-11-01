@@ -151,16 +151,6 @@ export async function handleRuns({
             prPreparationMs: null,
             toolRounds: 0,
             repairAttempts: 0,
-            ...(body.continueWithLargerBudget
-              ? {
-                  executionBudgetSeconds: Math.min(
-                    3600,
-                    Math.max(120, current.executionBudgetSeconds * 2),
-                  ),
-                  tokenBudget: Math.min(100000, current.tokenBudget * 2),
-                  maxToolRounds: Math.min(80, current.maxToolRounds * 2),
-                }
-              : {}),
             feedback: body.feedback
               ? z.string().max(10000).parse(body.feedback)
               : "",

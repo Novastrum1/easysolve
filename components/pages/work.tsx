@@ -729,8 +729,8 @@ export function IssuesPage(c: Context) {
               {preview.identities
                 .map((login: string) => "@" + login)
                 .join(", ") || "none"}
-              ; estimated work: {preview.estimated.seconds}s /{" "}
-              {preview.estimated.tokens.toLocaleString()} tokens.
+              ; estimated work: unlimited application budget (provider and
+              infrastructure limits still apply).
               {preview.skipped.length > 0 && (
                 <ul>
                   {preview.skipped.slice(0, 6).map((item: any) => (
@@ -917,7 +917,6 @@ export function RunPage(c: Context & { runId: string }) {
       await c.act(`runs/${c.runId}/${confirm}`, {
         sha: run.headSha,
         feedback,
-        continueWithLargerBudget: run.status === "blocked",
       });
       setRun(await request(`runs/${c.runId}`));
       setConfirm("");
@@ -1023,10 +1022,7 @@ export function RunPage(c: Context & { runId: string }) {
           {run.aiMs == null ? "—" : `${run.aiMs}ms`} · validation{" "}
           {run.validationMs == null ? "—" : `${run.validationMs}ms`}
         </span>
-        <span>
-          Budget: {run.executionBudgetSeconds}s · {run.toolRounds ?? 0}/
-          {run.maxToolRounds ?? "—"} rounds
-        </span>
+        <span>Actions: {run.toolRounds ?? 0} · provider-limited execution</span>
       </div>
       <div className="tabs">
         {["diff", "plan", "activity", "tests", "artifacts"].map((t) => (
@@ -1111,9 +1107,7 @@ export function RunPage(c: Context & { runId: string }) {
                 ? "The agent will inspect and rebuild the patch. The current approval will be cleared."
                 : confirm === "cancel"
                   ? "Pending work will stop. A running sandbox stops at its next checkpoint."
-                  : run.status === "blocked"
-                    ? "This run reached its fast budget or was assessed as complex. Retry will continue with a larger server-enforced budget."
-                    : "Retry uses the same run and branch, preventing duplicate pull requests."}
+                  : "Retry uses the same run and branch, preventing duplicate pull requests."}
           </p>
           {confirm === "changes" && (
             <Field label="Requested changes">

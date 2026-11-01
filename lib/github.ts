@@ -64,7 +64,7 @@ export class GitHub {
     );
     if (waitMs > maxInlineWait)
       throw new GithubRateLimitError(
-        "GitHub request pacing is paused. EasySolve queued this job until the recorded retry time without consuming execution budget.",
+        "GitHub request pacing is paused. EasySolve queued this job until the recorded retry time without advancing execution.",
         new Date(Date.now() + waitMs),
       );
     if (waitMs) await new Promise((resolve) => setTimeout(resolve, waitMs));

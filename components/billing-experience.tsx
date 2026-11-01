@@ -190,7 +190,7 @@ export function BillingExperience() {
                       : `${s.proIssueLimit} successfully solved issues`}
                 </p>
                 <p>{s.proGithubLimit} distinct GitHub accounts</p>
-                <p>Execution and AI token safety budgets still apply.</p>
+                <p>Provider limits and usage accounting remain active.</p>
                 <p>
                   Wallet payments are manual, never automatic recurring billing.
                 </p>

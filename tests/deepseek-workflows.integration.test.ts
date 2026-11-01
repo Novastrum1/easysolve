@@ -282,25 +282,30 @@ it("denies non-admin connection tests and binds verification to key/model", asyn
   delete process.env.AI_ADMIN_USER_IDS;
   delete process.env.AI_ADMIN_USER_IDS;
 });
-it("enforces input, job token/request budgets, and request rate ceilings before SDK calls", async () => {
-  for (const [name, value, runId] of [
-    ["AI_MAX_INPUT_BYTES", "1", undefined],
-    ["AI_JOB_MAX_TOKENS", "1", "budget-fixture"],
-    ["AI_JOB_MAX_REQUESTS", "1", "request-fixture"],
-    ["AI_REQUESTS_PER_MINUTE", "1", undefined],
-  ] as const) {
-    process.env[name] = value;
-    if (name === "AI_JOB_MAX_REQUESTS")
-      await db.aIRequest.create({ data: { userId, runId } });
-    try {
-      await expect(
-        ai(userId, "budget", "hello", "concise", runId),
-      ).rejects.toBeInstanceOf(Error);
-      expect(create).not.toHaveBeenCalled();
-    } finally {
-      delete process.env[name];
-    }
-  }
+it("enforces input and provider rate ceilings without per-run AI budgets", async () => {
+  process.env.AI_MAX_INPUT_BYTES = "1";
+  await expect(ai(userId, "input", "hello", "concise", "budget-fixture"))
+    .rejects.toBeInstanceOf(Error);
+  delete process.env.AI_MAX_INPUT_BYTES;
+
+  process.env.AI_JOB_MAX_TOKENS = "1";
+  process.env.AI_JOB_MAX_REQUESTS = "1";
+  reply("A response beyond the removed run budget.");
+  await expect(
+    ai(userId, "unlimited-run", "hello", "concise", "budget-fixture"),
+  ).resolves.toContain("beyond the removed run budget");
+  delete process.env.AI_JOB_MAX_TOKENS;
+  delete process.env.AI_JOB_MAX_REQUESTS;
+
+  process.env.AI_REQUESTS_PER_MINUTE = "1";
+  reply("The first request is allowed.");
+  await expect(ai(userId, "rate", "hello", "concise")).resolves.toContain(
+    "first request",
+  );
+  await expect(ai(userId, "rate", "hello", "concise")).rejects.toBeInstanceOf(
+    Error,
+  );
+  delete process.env.AI_REQUESTS_PER_MINUTE;
 });
 it("preserves billed incomplete usage and reasoning without accepting partial output", async () => {
   create.mockResolvedValueOnce(

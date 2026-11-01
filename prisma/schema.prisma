@@ -113,9 +113,9 @@ model Run {
  status String @default("queued")
   stage String @default("queued")
   blockedReason String?
-  executionBudgetSeconds Int @default(120)
-  tokenBudget Int @default(12000)
-  maxToolRounds Int @default(18)
+ executionBudgetSeconds Int?
+ tokenBudget Int?
+ maxToolRounds Int?
   maxRepairAttempts Int @default(2)
   toolRounds Int @default(0)
   repairAttempts Int @default(0)

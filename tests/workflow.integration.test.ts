@@ -191,7 +191,7 @@ describe("durable issue → run → approval → PR workflow", () => {
       { id: skipped.id, reason: "GitHub identity @fixture is not assigned" },
     ]);
     expect(result.groups).toEqual([[eligible.id]]);
-    expect(result.estimated.tokens).toBeGreaterThan(0);
+    expect(result.estimated).toEqual({ seconds: null, tokens: null });
     expect(await db.solveClaim.count({ where: { userId } })).toBe(before);
   });
   it("plan-only mode never starts a sandbox or writes to GitHub", async () => {

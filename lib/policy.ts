@@ -17,36 +17,6 @@ export const settingsSchema = z.object({
   monthlyTokens: z.number().int().min(1000).max(100000000).default(1000000),
   resetDay: z.number().int().min(1).max(28).default(1),
   resetHour: z.number().int().min(0).max(23).default(0),
-  executionBudgetSeconds: z
-    .number()
-    .int()
-    .min(30)
-    .max(3600)
-    .default(
-      Math.max(
-        30,
-        Math.min(3600, Number(process.env.RUN_TIMEOUT_SECONDS) || 120),
-      ),
-    ),
-  tokenBudget: z
-    .number()
-    .int()
-    .min(2000)
-    .max(100000)
-    .default(
-      Math.max(
-        2000,
-        Math.min(100000, Number(process.env.AI_JOB_MAX_TOKENS) || 12000),
-      ),
-    ),
-  maxToolRounds: z
-    .number()
-    .int()
-    .min(4)
-    .max(80)
-    .default(
-      Math.max(4, Math.min(80, Number(process.env.AGENT_MAX_STEPS) || 18)),
-    ),
   maxRepairAttempts: z
     .number()
     .int()

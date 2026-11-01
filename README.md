@@ -63,16 +63,12 @@ Copy the documented names in [.env.example](.env.example); never commit `.env`.
 | `DEEPSEEK_THINKING`          | `disabled` by default; `enabled` retains private reasoning only in transient tool history |
 | `DEEPSEEK_TIMEOUT_MS`        | Streaming deadline, default and maximum 90000 ms                                          |
 | `AI_MAX_OUTPUT_TOKENS`       | Per-request output ceiling, default 6,000                                                 |
-| `AI_JOB_MAX_TOKENS`          | Optional per-run total token ceiling; blank means no additional run-scoped ceiling        |
-| `AI_JOB_MAX_REQUESTS`        | Optional per-run provider request ceiling; blank means no additional run-scoped ceiling   |
 | `PLAN_NAME`                  | Self-hosted plan label, default Personal                                                  |
 | `PLAN_MAX_JOBS`              | Server-enforced monthly job ceiling per user, default 50                                  |
 | `PLAN_MAX_TOKENS`            | Server-enforced monthly token ceiling per user, default 1,000,000                         |
 | `SANDBOX_IMAGE`              | Trusted locally built execution image, default `easysolve-sandbox:local`                  |
 | `WORKER_CONCURRENCY`         | Global active job ceiling, default 10; one worker dispatches jobs concurrently            |
 | `WORKER_ACCOUNT_CONCURRENCY` | Per-account active job ceiling, default 10                                                |
-| `AGENT_MAX_STEPS`            | Maximum model actions per coding run, default 36 and minimum effective value 18           |
-| `RUN_TIMEOUT_MS`             | Per-attempt execution budget, default 900,000 ms; checked between bounded operations      |
 | `RECOVERY_WEBHOOK_URL`       | Optional email delivery adapter URL; receives authenticated POST `{email,url}`            |
 | `RECOVERY_WEBHOOK_SECRET`    | Bearer secret for the recovery adapter                                                    |
 | `COOKIE_SECURE`              | Defaults true for production; false only for local HTTP production-build tests            |
@@ -93,7 +89,7 @@ Chat streams visible answer text, supports cancellation, and returns validated t
 
 Account and admin views distinguish not configured, configured but unverified, verified, and connection failed. Only an administrator (`ADMIN` role) may test the connection. Verification follows a successful real request with valid usage, expires after 24 hours, and is bound to endpoint, model and key. Failures revoke verification. Authentication, balance, rate-limit, timeout and upstream errors are sanitized.
 
-Limits remain configurable through `AI_MAX_INPUT_BYTES`, `AI_MAX_OUTPUT_TOKENS`, `AI_REQUESTS_PER_MINUTE`, `AI_GLOBAL_REQUESTS_PER_MINUTE`, and `RUN_TIMEOUT_MS`. Run-scoped AI requests are not stopped by token budgets; execution remains bounded by request limits, rate limits, timeouts, and the agent's finite action-step limit. SDK retries are disabled; the durable queue retains its bounded retry policy. Usage comes only from actual provider receipts, including cache hits. Missing usage is never estimated as actual consumption.
+Provider and request limits remain configurable through `AI_MAX_INPUT_BYTES`, `AI_MAX_OUTPUT_TOKENS`, `AI_REQUESTS_PER_MINUTE`, and `AI_GLOBAL_REQUESTS_PER_MINUTE`. EasySolve does not impose cumulative per-run token, wall-clock, or action-count budgets. Individual provider/command timeouts, cancellation, leases, bounded retries, and repeated-action detection remain active. Usage comes only from actual provider receipts, including cache hits. Missing usage is never estimated as actual consumption.
 
 Prices are optional configurable USD per million tokens: `DEEPSEEK_INPUT_PRICE_PER_MILLION`, `DEEPSEEK_CACHED_PRICE_PER_MILLION`, `DEEPSEEK_OUTPUT_PRICE_PER_MILLION`. Blank means no estimate. Estimates apply only to DeepSeek records. DeepSeek uses separate price settings, so previous providers’ saved prices are never silently reused. [Official pricing](https://api-docs.deepseek.com/quick_start/pricing/) currently varies between peak and off-peak hours; choose the applicable documented rates or a conservative peak estimate and review them when rates change. Per-user Run settings can override estimates; estimates are not payment receipts.
 

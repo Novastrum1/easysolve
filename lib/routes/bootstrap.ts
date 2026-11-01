@@ -60,8 +60,6 @@ export async function handleBootstrap({
           status: true,
           stage: true,
           blockedReason: true,
-          executionBudgetSeconds: true,
-          tokenBudget: true,
           toolRounds: true,
           repairAttempts: true,
           queueWaitMs: true,

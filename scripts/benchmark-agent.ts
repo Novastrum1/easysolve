@@ -19,7 +19,6 @@ const runs = await db.run.findMany({
     executionMs: true,
     validationMs: true,
     toolRounds: true,
-    tokenBudget: true,
   },
 });
 const usage = await db.usage.groupBy({
@@ -46,7 +45,6 @@ const report = {
     validationMs: run.validationMs,
     toolRounds: run.toolRounds,
     actualTokens: totals.get(run.id) ?? 0,
-    tokenBudget: run.tokenBudget,
   })),
   medianMs: {
     queue: median(values("queueWaitMs")),

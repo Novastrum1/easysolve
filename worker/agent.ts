@@ -4,7 +4,6 @@ import { ai } from "../lib/ai";
 import { db } from "../lib/db";
 import { GithubRateLimitError, github } from "../lib/github";
 import { approveRun } from "../lib/queue";
-import { issueComplexity } from "../lib/policy";
 import { HttpError } from "../lib/security";
 import { Sandbox } from "./sandbox";
 const responseSchema = z.object({
@@ -127,7 +126,6 @@ export async function executeRun(userId: string, id: string) {
   });
   if (claimed.count !== 1) return;
   const executionStartedAt = Date.now();
-  const deadline = executionStartedAt + run.executionBudgetSeconds * 1000;
   const queueWaitMs = Math.max(0, executionStartedAt - run.createdAt.getTime());
   let checkoutMs = 0;
   let analysisMs = 0;
@@ -172,37 +170,6 @@ export async function executeRun(userId: string, id: string) {
     const issues = await db.issue.findMany({
       where: { userId, id: { in: run.issueIds as string[] } },
     });
-    const complexity = issueComplexity({
-      title: issues.map((i) => i.title).join(" · "),
-      body: issues.map((i) => i.body).join("\n"),
-      labels: issues.flatMap((i) => i.labels as string[]),
-      fileCount: tree.tree.length,
-      issueCount: issues.length,
-    });
-    if (complexity !== "small" && run.executionBudgetSeconds <= 120) {
-      const reason =
-        complexity === "blocked"
-          ? "Issue needs clarification or missing information before coding."
-          : "Issue was assessed as complex for the fast budget. Continue with a larger budget to allow more repository analysis and validation.";
-      await releaseRun(id);
-      await db.run.update({
-        where: { id },
-        data: {
-          status: "blocked",
-          stage: "assessment",
-          blockedReason: reason,
-          error: reason,
-          executionMs: Date.now() - executionStartedAt,
-          finishedAt: new Date(),
-          lastProgressAt: new Date(),
-        },
-      });
-      await db.issue.updateMany({
-        where: { userId, id: { in: run.issueIds as string[] } },
-        data: { status: "ready" },
-      });
-      return;
-    }
     await db.run.update({
       where: { id },
       data: {
@@ -224,8 +191,6 @@ export async function executeRun(userId: string, id: string) {
     const analysisStartedAt = Date.now();
     let bytes = 0;
     for (let offset = 0; offset < files.length; offset += 8) {
-      if (Date.now() > deadline)
-        throw Error("Execution budget exhausted during checkout");
       const loaded = await Promise.all(
         files.slice(offset, offset + 8).map(async (file: any) => {
           const blob = await gh.request(
@@ -281,14 +246,15 @@ export async function executeRun(userId: string, id: string) {
     const changed: Record<string, string> = {};
     const transcript: string[] = [];
     let repairing = false;
+    let step = 0;
+    let previousActionKey = "";
+    let previousResult = "";
+    let identicalNoProgress = 0;
     let tests = "",
       plan = "",
       finished = false,
       validationPassed = false;
-    const maxSteps = run.maxToolRounds;
-    for (let step = 0; step < maxSteps; step++) {
-      if (Date.now() > deadline)
-        throw Error("Execution budget exhausted before validation");
+    while (true) {
       const current = await db.run.findFirstOrThrow({ where: { id, userId } });
       if (current.status === "cancelled") throw Error("Run cancelled");
       const actionInput = `${context}\nRecent activity:\n${boundedTranscript(transcript)}\nReviewer feedback: ${run.feedback.slice(0, 4000)}`;
@@ -328,6 +294,7 @@ export async function executeRun(userId: string, id: string) {
         }
       }
       if (!action) throw Error("Agent did not return a valid action");
+      step += 1;
       plan = action.plan;
       await db.run.update({
         where: { id },
@@ -399,9 +366,19 @@ export async function executeRun(userId: string, id: string) {
       } else throw Error("Invalid agent action");
       transcript.push(JSON.stringify(action), result);
       await log(result.slice(0, 4000));
+      const actionKey = JSON.stringify(action);
+      if (actionKey === previousActionKey && result === previousResult)
+        identicalNoProgress += 1;
+      else identicalNoProgress = 0;
+      previousActionKey = actionKey;
+      previousResult = result;
+      if (identicalNoProgress >= 2)
+        throw Error(
+          "Agent stopped after repeating the same action without progress. Review the checkpoint and retry with clarification.",
+        );
     }
     if (!finished)
-      throw Error(`Agent reached bounded step limit (${maxSteps})`);
+      throw Error("Agent stopped without completing the requested work.");
     if (!Object.keys(changed).length)
       throw Error("Agent finished without a patch");
     if (!validationPassed)
@@ -481,9 +458,7 @@ export async function executeRun(userId: string, id: string) {
     const fresh = await db.run.findUniqueOrThrow({ where: { id } });
     if (fresh.status !== "cancelled") {
       const message = e instanceof Error ? e.message : "Agent failed";
-      const blocked = /budget exhausted|bounded step|timeout|time limit/i.test(
-        message,
-      );
+      const blocked = /timeout|time limit/i.test(message);
       await db.run.update({
         where: { id },
         data: {

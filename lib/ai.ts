@@ -67,16 +67,7 @@ export async function ai(
       const baseMax =
         conversation?.maxTokens ??
         limit("AI_MAX_OUTPUT_TOKENS", runId ? 4000 : 6000, 128000);
-      const run = runId
-        ? await tx.run.findFirst({
-            where: { id: runId, userId },
-            select: { tokenBudget: true },
-          })
-        : null;
-      const configuredJobMax = process.env.AI_JOB_MAX_TOKENS?.trim()
-        ? limit("AI_JOB_MAX_TOKENS", Number.MAX_SAFE_INTEGER, Number.MAX_SAFE_INTEGER)
-        : Number.MAX_SAFE_INTEGER;
-      let max = Math.min(baseMax, configuredJobMax);
+      const max = baseMax;
       const reserve =
         Buffer.byteLength(
           input +
@@ -91,39 +82,6 @@ export async function ai(
         512 +
         max;
       const runScoped = !!runId;
-      if (runScoped && configuredJobMax < 128)
-        throw new HttpError(
-          429,
-          "This run reached its AI token budget; continue with a larger budget to retry.",
-        );
-      if (runScoped && run) {
-        const jobUsage = await tx.usage.aggregate({
-          where: { userId, runId },
-          _sum: { total: true },
-        });
-        const remaining = run.tokenBudget - (jobUsage._sum.total ?? 0);
-        if (remaining < 128)
-          throw new HttpError(
-            429,
-            "This run reached its AI token budget; continue with a larger budget to retry.",
-          );
-        max = Math.min(baseMax, configuredJobMax, remaining);
-      }
-      if (runScoped && process.env.AI_JOB_MAX_REQUESTS?.trim()) {
-        const jobMaxRequests = limit(
-          "AI_JOB_MAX_REQUESTS",
-          Number.MAX_SAFE_INTEGER,
-          Number.MAX_SAFE_INTEGER,
-        );
-        const jobRequests = await tx.aIRequest.count({
-          where: { userId, runId },
-        });
-        if (jobRequests >= jobMaxRequests)
-          throw new HttpError(
-            429,
-            "This run reached its AI request budget; retry with a larger configured budget.",
-          );
-      }
       if (
         !runScoped &&
         (usage._sum.total ?? 0) + reserve > planLimits(u).tokens
@@ -223,21 +181,6 @@ export async function ai(
     });
   });
   if (runId) {
-    const run = await db.run.findFirst({
-      where: { id: runId, userId },
-      select: { tokenBudget: true },
-    });
-    if (run) {
-      const total = await db.usage.aggregate({
-        where: { userId, runId },
-        _sum: { total: true },
-      });
-      if ((total._sum.total ?? 0) > run.tokenBudget)
-        throw new HttpError(
-          429,
-          "This run reached its AI token budget; continue with a larger budget to retry.",
-        );
-    }
   }
   if (result.failure) throw result.failure;
   if (conversation) conversation.calls = result.calls;

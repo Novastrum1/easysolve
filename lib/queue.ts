@@ -28,7 +28,7 @@ export type RunSelectionPreview = {
   allowance: { available: number | null; requested: number; limit: number };
   repositories: string[];
   identities: string[];
-  estimated: { seconds: number; tokens: number };
+  estimated: { seconds: null; tokens: null };
   worker: { available: boolean; reason?: string };
   sandbox: { available: boolean; reason?: string };
 };
@@ -184,8 +184,8 @@ async function selectionPreview(
       ),
     ],
     estimated: {
-      seconds: allowed.length * Math.min(config.executionBudgetSeconds, 120),
-      tokens: allowed.length * config.tokenBudget,
+      seconds: null,
+      tokens: null,
     },
     worker:
       process.env.WORKER_DISABLED === "true"
@@ -274,9 +274,6 @@ export async function startRunsDetailed(
           branch: `fix/${crypto.randomUUID()}`,
           mode: config.mode,
           stage: "queued",
-          executionBudgetSeconds: config.executionBudgetSeconds,
-          tokenBudget: config.tokenBudget,
-          maxToolRounds: config.maxToolRounds,
           maxRepairAttempts: config.maxRepairAttempts,
         },
       });
@@ -392,9 +389,6 @@ export async function startRuns(
           branch: `fix/${crypto.randomUUID()}`,
           mode: config.mode,
           stage: "queued",
-          executionBudgetSeconds: config.executionBudgetSeconds,
-          tokenBudget: config.tokenBudget,
-          maxToolRounds: config.maxToolRounds,
           maxRepairAttempts: config.maxRepairAttempts,
         },
       });
