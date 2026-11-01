@@ -3,7 +3,10 @@ import { db } from "./db";
 import { monthStart, settings, planLimits } from "./policy";
 import { HttpError } from "./security";
 
-export type RunSelectionOptions = { grouped?: boolean };
+export type RunSelectionOptions = {
+  grouped?: boolean;
+  requireWorker?: boolean;
+};
 
 type SelectionIssue = {
   id: string;
@@ -195,6 +198,15 @@ async function selectionPreview(
   };
 }
 
+async function workerAvailable(tx: any) {
+  if (process.env.WORKER_DISABLED === "true") return false;
+  const row = await tx.workerHeartbeat.findFirst({
+    where: { lastSeen: { gt: new Date(Date.now() - 90000) } },
+    select: { id: true },
+  });
+  return !!row;
+}
+
 export async function previewRuns(
   userId: string,
   ids: string[],
@@ -202,7 +214,16 @@ export async function previewRuns(
 ) {
   if (!ids.length || ids.length > 40)
     throw new HttpError(422, "Select between 1 and 40 issues");
-  return db.$transaction((tx) => selectionPreview(tx, userId, ids, options));
+  return db.$transaction(async (tx) => {
+    const result = await selectionPreview(tx, userId, ids, options);
+    if (!(await workerAvailable(tx)))
+      result.worker = {
+        available: false,
+        reason:
+          "No healthy production worker heartbeat is available. Try again shortly.",
+      };
+    return result;
+  });
 }
 
 export async function startRunsDetailed(
@@ -211,6 +232,11 @@ export async function startRunsDetailed(
   options: RunSelectionOptions = {},
 ) {
   const preview = await selectionPreview(db, userId, ids, options);
+  if (options.requireWorker && !(await workerAvailable(db)))
+    throw new HttpError(
+      503,
+      "No healthy production worker heartbeat is available. Try again shortly.",
+    );
   if (!preview.worker.available || !preview.sandbox.available)
     throw new HttpError(
       503,

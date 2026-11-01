@@ -2,7 +2,7 @@ import { reserveRun, releaseRun } from "../lib/entitlements";
 import { z } from "zod";
 import { ai } from "../lib/ai";
 import { db } from "../lib/db";
-import { github } from "../lib/github";
+import { GithubRateLimitError, github } from "../lib/github";
 import { approveRun } from "../lib/queue";
 import { issueComplexity } from "../lib/policy";
 import { Sandbox } from "./sandbox";
@@ -439,6 +439,26 @@ export async function executeRun(userId: string, id: string) {
       await approveRun(userId, id, approvedSha);
     }
   } catch (e) {
+    if (e instanceof GithubRateLimitError) {
+      await releaseRun(id);
+      await db.run.updateMany({
+        where: { id, userId, status: "running" },
+        data: {
+          status: "queued",
+          stage: "queued",
+          error: e.message,
+          blockedReason: null,
+          finishedAt: null,
+          executionMs: null,
+          lastProgressAt: new Date(),
+        },
+      });
+      await db.issue.updateMany({
+        where: { userId, id: { in: run.issueIds as string[] } },
+        data: { status: "in_progress" },
+      });
+      throw e;
+    }
     await releaseRun(id);
     const fresh = await db.run.findUniqueOrThrow({ where: { id } });
     if (fresh.status !== "cancelled") {

@@ -14,6 +14,20 @@ import { settings } from "../lib/policy";
 import { claimJob, enqueue } from "../lib/queue";
 import { executeRun, publish } from "./agent";
 import { recordProviderRuntime } from "../lib/provider-runtime";
+const workerId = process.env.WORKER_ID || "worker:" + process.pid;
+const workerVersion = process.env.RELEASE_VERSION || "unknown";
+async function heartbeat(activeJobs: number) {
+  await db.workerHeartbeat.upsert({
+    where: { id: workerId },
+    create: {
+      id: workerId,
+      lastSeen: new Date(),
+      activeJobs,
+      version: workerVersion,
+    },
+    update: { lastSeen: new Date(), activeJobs, version: workerVersion },
+  });
+}
 let stopped = false;
 process.on("SIGTERM", () => (stopped = true));
 process.on("SIGINT", () => (stopped = true));
@@ -74,6 +88,10 @@ async function main() {
   let last = 0;
   const concurrency = Math.max(1, Number(process.env.WORKER_CONCURRENCY || 10));
   const active = new Set<Promise<void>>();
+  await heartbeat(0);
+  const heartbeatTimer = setInterval(() => {
+    void heartbeat(active.size).catch(() => {});
+  }, 15000);
   console.log(
     `EasySolve worker online; PostgreSQL durable queue, concurrency=${concurrency}`,
   );
@@ -100,6 +118,10 @@ async function main() {
     }
   }
   await Promise.allSettled(active);
+  clearInterval(heartbeatTimer);
+  await db.workerHeartbeat
+    .deleteMany({ where: { id: workerId } })
+    .catch(() => {});
   await db.$disconnect();
 }
 async function processJob(job: Awaited<ReturnType<typeof claimJob>>) {
@@ -144,6 +166,7 @@ async function processJob(job: Awaited<ReturnType<typeof claimJob>>) {
       !githubCredential &&
       (allowance ||
         ((!(e instanceof AIProviderError) || e.retryable) && job.attempts < 3));
+    const pauseRunForGithub = githubLimited && job.kind === "run";
     if (
       e instanceof GithubCredentialError ||
       (e instanceof Error && /GitHub 401:/.test(e.message))
@@ -190,20 +213,25 @@ async function processJob(job: Awaited<ReturnType<typeof claimJob>>) {
     await db.job.updateMany({
       where: { id: job.id, status: "running", attempts: job.attempts },
       data: {
-        status: !blockedRun && retryableJob ? "queued" : "failed",
+        status:
+          pauseRunForGithub || (!blockedRun && retryableJob)
+            ? "queued"
+            : "failed",
         leaseUntil: null,
         availableAt: allowance
           ? e.reset
           : githubLimited
             ? e.retryAt
             : new Date(Date.now() + job.attempts * 30000),
-        error: allowance
-          ? "Allowance exhausted"
-          : githubLimited
-            ? e.message
-            : e instanceof Error
-              ? e.message.slice(0, 2000)
-              : "Job failed",
+        error: pauseRunForGithub
+          ? e.message
+          : allowance
+            ? "Allowance exhausted"
+            : githubLimited
+              ? e.message
+              : e instanceof Error
+                ? e.message.slice(0, 2000)
+                : "Job failed",
       },
     });
     if (allowance && job.kind === "run")
@@ -214,6 +242,23 @@ async function processJob(job: Awaited<ReturnType<typeof claimJob>>) {
           status: { not: "cancelled" },
         },
         data: { status: "queued", error: "Waiting for allowance reset" },
+      });
+    if (pauseRunForGithub)
+      await db.run.updateMany({
+        where: {
+          id: (job.payload as { runId: string }).runId,
+          userId: job.userId,
+          status: { in: ["running", "queued"] },
+        },
+        data: {
+          status: "queued",
+          stage: "queued",
+          error:
+            e instanceof Error
+              ? e.message.slice(0, 2000)
+              : "GitHub pacing paused",
+          lastProgressAt: new Date(),
+        },
       });
     if (job.kind === "publish")
       await db.run.updateMany({

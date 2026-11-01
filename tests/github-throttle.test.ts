@@ -75,3 +75,15 @@ it("stops after GitHub reports a retryable rate or abuse limit", async () => {
   await expect(client.request("/user")).rejects.toMatchObject({ status: 429 });
   expect(fetch).toHaveBeenCalledTimes(1);
 });
+
+it("pauses instead of burning execution time during long coordinated pacing", async () => {
+  state.row = { nextAllowedAt: new Date(Date.now() + 60000) };
+  const fetch = vi.fn().mockResolvedValue(Response.json({ ok: true }));
+  vi.stubGlobal("fetch", fetch);
+  await expect(
+    new GitHub("token", "user:one").request("/repos/a/b"),
+  ).rejects.toMatchObject({
+    status: 429,
+  });
+  expect(fetch).not.toHaveBeenCalled();
+});

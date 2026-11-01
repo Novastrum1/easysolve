@@ -165,6 +165,13 @@ model Job {
  updatedAt DateTime @updatedAt
  @@index([status,availableAt])
 }
+model WorkerHeartbeat {
+ id String @id
+ lastSeen DateTime
+ activeJobs Int @default(0)
+ version String @default("")
+ updatedAt DateTime @updatedAt
+}
 model Message {
  id String @id @default(cuid())
  userId String

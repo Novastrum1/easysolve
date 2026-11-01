@@ -22,6 +22,7 @@ export async function handleRuns({
     return json(
       await startRunsDetailed(u.id, issueIds, {
         grouped: body.grouped === true,
+        requireWorker: true,
       }),
     );
   }
@@ -137,6 +138,19 @@ export async function handleRuns({
             approvedSha: null,
             headSha: null,
             error: null,
+            finishedAt: null,
+            startedAt: null,
+            queueWaitMs: null,
+            checkoutMs: null,
+            analysisMs: null,
+            dependencyMs: null,
+            aiMs: null,
+            editMs: null,
+            executionMs: null,
+            validationMs: null,
+            prPreparationMs: null,
+            toolRounds: 0,
+            repairAttempts: 0,
             ...(body.continueWithLargerBudget
               ? {
                   executionBudgetSeconds: Math.min(
