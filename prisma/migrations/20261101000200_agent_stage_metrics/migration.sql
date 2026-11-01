@@ -1,0 +1,7 @@
+ALTER TABLE "Run"
+  ADD COLUMN "checkoutMs" INTEGER,
+  ADD COLUMN "analysisMs" INTEGER,
+  ADD COLUMN "dependencyMs" INTEGER,
+  ADD COLUMN "aiMs" INTEGER,
+  ADD COLUMN "editMs" INTEGER,
+  ADD COLUMN "prPreparationMs" INTEGER;

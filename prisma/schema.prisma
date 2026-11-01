@@ -111,6 +111,24 @@ model Run {
  issueIds Json
  title String
  status String @default("queued")
+  stage String @default("queued")
+  blockedReason String?
+  executionBudgetSeconds Int @default(120)
+  tokenBudget Int @default(12000)
+  maxToolRounds Int @default(18)
+  maxRepairAttempts Int @default(2)
+  toolRounds Int @default(0)
+  repairAttempts Int @default(0)
+  queueWaitMs Int?
+  checkoutMs Int?
+  analysisMs Int?
+  dependencyMs Int?
+  aiMs Int?
+  editMs Int?
+  executionMs Int?
+  validationMs Int?
+  prPreparationMs Int?
+  lastProgressAt DateTime?
  branch String @unique
  baseSha String?
  headSha String?

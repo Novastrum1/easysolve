@@ -161,12 +161,25 @@ async function processJob(job: Awaited<ReturnType<typeof claimJob>>) {
           data: { status: "needs_attention" },
         });
     }
+    const blockedRun =
+      job.kind === "run" &&
+      (
+        await db.run.findFirst({
+          where: {
+            id: (job.payload as { runId?: string }).runId,
+            userId: job.userId,
+          },
+          select: { status: true },
+        })
+      )?.status === "blocked";
     await db.job.updateMany({
       where: { id: job.id, status: "running", attempts: job.attempts },
       data: {
         status:
-          allowance ||
-          ((!(e instanceof AIProviderError) || e.retryable) && job.attempts < 3)
+          !blockedRun &&
+          (allowance ||
+            ((!(e instanceof AIProviderError) || e.retryable) &&
+              job.attempts < 3))
             ? "queued"
             : "failed",
         leaseUntil: null,

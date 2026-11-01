@@ -19,6 +19,7 @@
     "test:browser": "playwright test",
     "test:integration": "vitest run --config vitest.integration.config.ts",
     "doctor": "tsx scripts/doctor.ts",
+    "benchmark:agent": "tsx scripts/benchmark-agent.ts",
     "format": "prettier --write app components lib worker tests scripts docs README.md",
     "ai:verify": "tsx scripts/verify-ai.ts",
     "billing:enable-mainnet": "tsx scripts/enable-live-checkout.ts"

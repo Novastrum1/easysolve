@@ -42,15 +42,24 @@ export async function handleRuns({
           where: { id: run.id },
         });
         if (
-          !["queued", "running", "awaiting_review", "failed"].includes(
-            current.status,
-          )
+          ![
+            "queued",
+            "running",
+            "awaiting_review",
+            "failed",
+            "blocked",
+          ].includes(current.status)
         )
           throw new HttpError(409, "This run can no longer be cancelled");
         await releaseRun(run.id, tx);
         await tx.run.update({
           where: { id: run.id },
-          data: { status: "cancelled", finishedAt: new Date() },
+          data: {
+            status: "cancelled",
+            stage: "cancelled",
+            finishedAt: new Date(),
+            lastProgressAt: new Date(),
+          },
         });
         await tx.job.updateMany({
           where: {
@@ -71,7 +80,11 @@ export async function handleRuns({
       return json({ message: "Publication queued" });
     }
     if (path[2] === "retry" || path[2] === "changes") {
-      if (!["failed", "awaiting_review", "cancelled"].includes(run.status))
+      if (
+        !["failed", "awaiting_review", "cancelled", "blocked"].includes(
+          run.status,
+        )
+      )
         throw new HttpError(409, "Run cannot be retried in this state");
       await db.$transaction(async (tx) => {
         await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${u.id}))`;
@@ -83,7 +96,9 @@ export async function handleRuns({
           where: { id: run.id },
         });
         if (
-          !["failed", "awaiting_review", "cancelled"].includes(current.status)
+          !["failed", "awaiting_review", "cancelled", "blocked"].includes(
+            current.status,
+          )
         )
           throw new HttpError(409, "Run changed during retry");
         const ids = run.issueIds as string[];
@@ -107,9 +122,21 @@ export async function handleRuns({
           where: { id: run.id },
           data: {
             status: "queued",
+            stage: "queued",
+            blockedReason: null,
             approvedSha: null,
             headSha: null,
             error: null,
+            ...(body.continueWithLargerBudget
+              ? {
+                  executionBudgetSeconds: Math.min(
+                    3600,
+                    Math.max(120, current.executionBudgetSeconds * 2),
+                  ),
+                  tokenBudget: Math.min(100000, current.tokenBudget * 2),
+                  maxToolRounds: Math.min(80, current.maxToolRounds * 2),
+                }
+              : {}),
             feedback: body.feedback
               ? z.string().max(10000).parse(body.feedback)
               : "",

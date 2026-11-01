@@ -2,6 +2,11 @@ import type { NextConfig } from "next";
 const config: NextConfig = {
   poweredByHeader: false,
   devIndicators: false,
+  experimental: {
+    // The installed TypeScript 5 compiler API is stable in this repository;
+    // the CLI path in Next 16.4 currently emits empty --showConfig output.
+    useTypeScriptCli: false,
+  },
   async headers() {
     return [
       {

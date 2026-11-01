@@ -17,6 +17,47 @@ export const settingsSchema = z.object({
   monthlyTokens: z.number().int().min(1000).max(100000000).default(1000000),
   resetDay: z.number().int().min(1).max(28).default(1),
   resetHour: z.number().int().min(0).max(23).default(0),
+  executionBudgetSeconds: z
+    .number()
+    .int()
+    .min(30)
+    .max(3600)
+    .default(
+      Math.max(
+        30,
+        Math.min(3600, Number(process.env.RUN_TIMEOUT_SECONDS) || 120),
+      ),
+    ),
+  tokenBudget: z
+    .number()
+    .int()
+    .min(2000)
+    .max(100000)
+    .default(
+      Math.max(
+        2000,
+        Math.min(100000, Number(process.env.AI_JOB_MAX_TOKENS) || 12000),
+      ),
+    ),
+  maxToolRounds: z
+    .number()
+    .int()
+    .min(4)
+    .max(80)
+    .default(
+      Math.max(4, Math.min(80, Number(process.env.AGENT_MAX_STEPS) || 18)),
+    ),
+  maxRepairAttempts: z
+    .number()
+    .int()
+    .min(0)
+    .max(10)
+    .default(
+      Math.max(
+        0,
+        Math.min(10, Number(process.env.AGENT_MAX_REPAIR_ATTEMPTS ?? 2)),
+      ),
+    ),
   monthlyJobs: z.number().int().min(1).max(10000).default(50),
   deepseekInputPrice: z
     .number()
@@ -32,6 +73,33 @@ export const settingsSchema = z.object({
     .default(Number(process.env.DEEPSEEK_OUTPUT_PRICE_PER_MILLION) || 0),
 });
 export const settings = (v: unknown) => settingsSchema.parse(v ?? {});
+
+export function issueComplexity(input: {
+  title: string;
+  body: string;
+  labels?: string[];
+  fileCount?: number;
+  issueCount?: number;
+}) {
+  const text = `${input.title}\n${input.body}`.toLowerCase();
+  if (
+    /blocked|cannot reproduce|missing information|unclear requirement/.test(
+      text,
+    )
+  )
+    return "blocked" as const;
+  if (
+    /security|credential|authentication|migration|database|architecture|concurren|performance|refactor|breaking change|multiple services/.test(
+      text,
+    ) ||
+    (input.issueCount ?? 1) > 1 ||
+    (input.fileCount ?? 0) > 1200
+  )
+    return "complex" as const;
+  if ((input.body.length > 5000 ? 1 : 0) + (input.labels?.length ?? 0) > 6)
+    return "complex" as const;
+  return "small" as const;
+}
 export function repoName(value: string) {
   const clean = value
     .trim()

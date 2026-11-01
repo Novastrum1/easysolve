@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   groups,
+  issueComplexity,
   monthStart,
   nextMonth,
   repoName,
@@ -51,6 +52,23 @@ describe("workflow policies", () => {
       waveLimit: 3,
     });
     expect(() => settings({ mode: "unrestricted" })).toThrow();
+  });
+  it("classifies localized, complex, and blocked issues before coding", () => {
+    expect(
+      issueComplexity({ title: "Fix button", body: "Update the label." }),
+    ).toBe("small");
+    expect(
+      issueComplexity({
+        title: "Database migration",
+        body: "Change the schema.",
+      }),
+    ).toBe("complex");
+    expect(
+      issueComplexity({
+        title: "Blocked",
+        body: "Missing information from the reporter.",
+      }),
+    ).toBe("blocked");
   });
   it("invalidates approvals on changed PR heads", () => {
     const reviews = [

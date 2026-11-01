@@ -442,6 +442,59 @@ export function SettingsPage(c: Context) {
           </div>
         </Panel>
       </div>
+      <Panel
+        title="Agent execution budgets"
+        description="These server-enforced limits keep small issues fast and make larger work explicitly opt-in."
+      >
+        <div className="settings-fields form-grid">
+          <Field
+            label="Fast execution budget (seconds)"
+            hint="30–3600 seconds; the default is 120."
+          >
+            <input
+              type="number"
+              min={30}
+              max={3600}
+              value={config.executionBudgetSeconds}
+              onChange={(e) =>
+                update("executionBudgetSeconds", Number(e.target.value))
+              }
+            />
+          </Field>
+          <Field
+            label="Total AI token budget"
+            hint="Counts actual DeepSeek usage for the whole run."
+          >
+            <input
+              type="number"
+              min={2000}
+              max={100000}
+              value={config.tokenBudget}
+              onChange={(e) => update("tokenBudget", Number(e.target.value))}
+            />
+          </Field>
+          <Field label="Maximum tool rounds">
+            <input
+              type="number"
+              min={4}
+              max={80}
+              value={config.maxToolRounds}
+              onChange={(e) => update("maxToolRounds", Number(e.target.value))}
+            />
+          </Field>
+          <Field label="Maximum repair attempts">
+            <input
+              type="number"
+              min={0}
+              max={10}
+              value={config.maxRepairAttempts}
+              onChange={(e) =>
+                update("maxRepairAttempts", Number(e.target.value))
+              }
+            />
+          </Field>
+        </div>
+      </Panel>
     </>
   );
 }

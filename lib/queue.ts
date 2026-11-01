@@ -83,6 +83,11 @@ export async function startRuns(userId: string, ids: string[]) {
           title: batch.map((i) => `#${i.number} ${i.title}`).join(" · "),
           branch: `fix/${crypto.randomUUID()}`,
           mode: config.mode,
+          stage: "queued",
+          executionBudgetSeconds: config.executionBudgetSeconds,
+          tokenBudget: config.tokenBudget,
+          maxToolRounds: config.maxToolRounds,
+          maxRepairAttempts: config.maxRepairAttempts,
         },
       });
       if (run.mode !== "plan")
@@ -112,13 +117,13 @@ export async function startRuns(userId: string, ids: string[]) {
 export async function claimJob() {
   return db.$transaction(async (tx) => {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('easysolve:claim'))`;
-    const globalLimit = Math.max(
-      1,
-      Number(process.env.WORKER_CONCURRENCY || 10),
+    const globalLimit = Math.min(
+      50,
+      Math.max(1, Number(process.env.WORKER_CONCURRENCY || 10)),
     );
-    const accountLimit = Math.max(
-      1,
-      Number(process.env.WORKER_ACCOUNT_CONCURRENCY || 10),
+    const accountLimit = Math.min(
+      20,
+      Math.max(1, Number(process.env.WORKER_ACCOUNT_CONCURRENCY || 10)),
     );
     const active = await tx.job.count({
       where: { status: "running", leaseUntil: { gt: new Date() } },
@@ -164,7 +169,12 @@ export async function approveRun(userId: string, runId: string, sha: string) {
       throw new HttpError(409, "Patch changed or run is not awaiting review");
     await tx.run.update({
       where: { id: runId },
-      data: { approvedSha: sha, error: null },
+      data: {
+        approvedSha: sha,
+        error: null,
+        stage: "publishing",
+        lastProgressAt: new Date(),
+      },
     });
     return tx.job.upsert({
       where: { key: `publish:${runId}` },

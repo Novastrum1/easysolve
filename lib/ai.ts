@@ -28,6 +28,7 @@ export type AIConversation = {
   calls: { id: string; name: string; arguments: string }[];
   signal?: AbortSignal;
   onText?: (text: string) => void;
+  maxTokens?: number;
 };
 export async function ai(
   userId: string,
@@ -48,181 +49,196 @@ export async function ai(
     );
   await rateLimit(`ai:${userId}`, limit("AI_REQUESTS_PER_MINUTE", 20));
   await rateLimit("ai:global", limit("AI_GLOBAL_REQUESTS_PER_MINUTE", 60));
-  const result = await db
-    .$transaction(
-      async (tx) => {
-        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`usage:${userId}`}))`;
-        const u = await tx.user.findUniqueOrThrow({ where: { id: userId } });
-        if (u.suspendedAt) throw new HttpError(403, "Account suspended");
-        const config = settings(u.settings);
-        const usage = await tx.usage.aggregate({
-          where: { userId, createdAt: { gte: monthStart() } },
+  const admission = await db.$transaction(
+    async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`usage:${userId}`}))`;
+      const u = await tx.user.findUniqueOrThrow({ where: { id: userId } });
+      if (u.suspendedAt) throw new HttpError(403, "Account suspended");
+      const config = settings(u.settings);
+      const usage = await tx.usage.aggregate({
+        where: { userId, createdAt: { gte: monthStart() } },
+        _sum: { total: true },
+      });
+      const window = allowanceWindow(config);
+      const cycle = await tx.usage.aggregate({
+        where: { userId, createdAt: { gte: window.start } },
+        _sum: { total: true },
+      });
+      const baseMax =
+        conversation?.maxTokens ??
+        limit("AI_MAX_OUTPUT_TOKENS", runId ? 4000 : 6000, 128000);
+      const run = runId
+        ? await tx.run.findFirst({
+            where: { id: runId, userId },
+            select: { tokenBudget: true },
+          })
+        : null;
+      const configuredJobMax = process.env.AI_JOB_MAX_TOKENS?.trim()
+        ? limit("AI_JOB_MAX_TOKENS", Number.MAX_SAFE_INTEGER, Number.MAX_SAFE_INTEGER)
+        : Number.MAX_SAFE_INTEGER;
+      let max = Math.min(baseMax, configuredJobMax);
+      const reserve =
+        Buffer.byteLength(
+          input +
+            instructions +
+            JSON.stringify([
+              tools ?? [],
+              format ?? {},
+              conversation?.messages ?? [],
+            ]),
+          "utf8",
+        ) +
+        512 +
+        max;
+      const runScoped = !!runId;
+      if (runScoped && configuredJobMax < 128)
+        throw new HttpError(
+          429,
+          "This run reached its AI token budget; continue with a larger budget to retry.",
+        );
+      if (runScoped && run) {
+        const jobUsage = await tx.usage.aggregate({
+          where: { userId, runId },
           _sum: { total: true },
         });
-        const window = allowanceWindow(config);
-        const cycle = await tx.usage.aggregate({
-          where: { userId, createdAt: { gte: window.start } },
-          _sum: { total: true },
-        });
-        const max = limit("AI_MAX_OUTPUT_TOKENS", runId ? 12000 : 6000, 128000);
-        const reserve =
-          Buffer.byteLength(
-            input +
-              instructions +
-              JSON.stringify([
-                tools ?? [],
-                format ?? {},
-                conversation?.messages ?? [],
-              ]),
-            "utf8",
-          ) +
-          512 +
-          max;
-        const runScoped = !!runId;
-        if (runScoped && process.env.AI_JOB_MAX_TOKENS?.trim()) {
-          const jobMaxTokens = limit(
-            "AI_JOB_MAX_TOKENS",
-            Number.MAX_SAFE_INTEGER,
-            Number.MAX_SAFE_INTEGER,
-          );
-          const jobUsage = await tx.usage.aggregate({
-            where: { userId, runId },
-            _sum: { total: true },
-          });
-          if ((jobUsage._sum.total ?? 0) + reserve > jobMaxTokens)
-            throw new HttpError(
-              429,
-              "This run reached its AI token budget; retry with a larger configured budget.",
-            );
-        }
-        if (runScoped && process.env.AI_JOB_MAX_REQUESTS?.trim()) {
-          const jobMaxRequests = limit(
-            "AI_JOB_MAX_REQUESTS",
-            Number.MAX_SAFE_INTEGER,
-            Number.MAX_SAFE_INTEGER,
-          );
-          const jobRequests = await tx.aIRequest.count({
-            where: { userId, runId },
-          });
-          if (jobRequests >= jobMaxRequests)
-            throw new HttpError(
-              429,
-              "This run reached its AI request budget; retry with a larger configured budget.",
-            );
-        }
-        if (
-          !runScoped &&
-          (usage._sum.total ?? 0) + reserve > planLimits(u).tokens
-        )
-          throw new AllowanceError(
-            "Plan token allowance exhausted; queued until next reset",
-            nextMonth(),
-          );
-        if (
-          !runScoped &&
-          (cycle._sum.total ?? 0) + reserve > config.monthlyTokens
-        )
-          throw new AllowanceError(
-            "Token allowance exhausted; queued until configured reset",
-            window.reset,
-          );
-        if (
-          Buffer.byteLength(
-            input +
-              instructions +
-              JSON.stringify([
-                tools ?? [],
-                format ?? {},
-                conversation?.messages ?? [],
-              ]),
-          ) > limit("AI_MAX_INPUT_BYTES", 200000)
-        )
+        const remaining = run.tokenBudget - (jobUsage._sum.total ?? 0);
+        if (remaining < 128)
           throw new HttpError(
-            413,
-            "AI request exceeds the configured input limit. Narrow the context.",
+            429,
+            "This run reached its AI token budget; continue with a larger budget to retry.",
           );
-        // Durable attempts include rejected/interrupted requests; usage rows remain actual receipts only.
-        await db.aIRequest.create({ data: { userId, runId } });
-        const response = await generateAI({
-          input,
-          instructions,
-          maxTokens: max,
-          tools,
-          format,
-          history: conversation?.messages,
-          signal: conversation?.signal,
-          onText: conversation?.onText,
+        max = Math.min(baseMax, configuredJobMax, remaining);
+      }
+      if (runScoped && process.env.AI_JOB_MAX_REQUESTS?.trim()) {
+        const jobMaxRequests = limit(
+          "AI_JOB_MAX_REQUESTS",
+          Number.MAX_SAFE_INTEGER,
+          Number.MAX_SAFE_INTEGER,
+        );
+        const jobRequests = await tx.aIRequest.count({
+          where: { userId, runId },
         });
-        const model = response.model;
-        const usageData = response.usage;
-        if (usageData)
-          await tx.usage.create({
-            data: {
-              userId,
-              provider: response.provider,
-              runId,
-              purpose,
-              model,
-              input: usageData?.input_tokens ?? 0,
-              cached: usageData?.input_tokens_details?.cached_tokens ?? 0,
-              output: usageData?.output_tokens ?? 0,
-              reasoning:
-                usageData?.output_tokens_details?.reasoning_tokens ?? 0,
-              total: usageData?.total_tokens ?? 0,
-            },
-          });
-        if (!response.failure)
-          await tx.providerConnection.upsert({
-            where: { id: provider.id },
-            create: {
-              id: provider.id,
-              fingerprint: providerFingerprint(),
-              model: provider.model,
-              verifiedAt: new Date(),
-            },
-            update: {
-              fingerprint: providerFingerprint(),
-              model: provider.model,
-              verifiedAt: new Date(),
-            },
-          });
-        else
-          await tx.providerConnection.upsert({
-            where: { id: provider.id },
-            create: {
-              id: provider.id,
-              fingerprint: providerFingerprint(),
-              model: provider.model,
-              verifiedAt: new Date(0),
-            },
-            update: {
-              fingerprint: providerFingerprint(),
-              model: provider.model,
-              verifiedAt: new Date(0),
-            },
-          });
-        return response;
+        if (jobRequests >= jobMaxRequests)
+          throw new HttpError(
+            429,
+            "This run reached its AI request budget; retry with a larger configured budget.",
+          );
+      }
+      if (
+        !runScoped &&
+        (usage._sum.total ?? 0) + reserve > planLimits(u).tokens
+      )
+        throw new AllowanceError(
+          "Plan token allowance exhausted; queued until next reset",
+          nextMonth(),
+        );
+      if (
+        !runScoped &&
+        (cycle._sum.total ?? 0) + reserve > config.monthlyTokens
+      )
+        throw new AllowanceError(
+          "Token allowance exhausted; queued until configured reset",
+          window.reset,
+        );
+      if (
+        Buffer.byteLength(
+          input +
+            instructions +
+            JSON.stringify([
+              tools ?? [],
+              format ?? {},
+              conversation?.messages ?? [],
+            ]),
+        ) > limit("AI_MAX_INPUT_BYTES", 200000)
+      )
+        throw new HttpError(
+          413,
+          "AI request exceeds the configured input limit. Narrow the context.",
+        );
+      // Durable attempts include rejected/interrupted requests; usage rows remain actual receipts only.
+      await tx.aIRequest.create({ data: { userId, runId } });
+      return { maxTokens: max };
+    },
+    { timeout: 15000 },
+  );
+  let result;
+  try {
+    result = await generateAI({
+      input,
+      instructions,
+      maxTokens: admission.maxTokens,
+      tools,
+      format,
+      history: conversation?.messages,
+      signal: conversation?.signal,
+      onText: conversation?.onText,
+    });
+  } catch (error) {
+    await db.providerConnection.upsert({
+      where: { id: provider.id },
+      create: {
+        id: provider.id,
+        fingerprint: providerFingerprint(),
+        model: provider.model,
+        verifiedAt: new Date(0),
       },
-      { timeout: 110000 },
-    )
-    .catch(async (error: unknown) => {
-      // A failed request revokes previous connection health; do not retain stale success.
-      await db.providerConnection.upsert({
-        where: { id: provider.id },
-        create: {
-          id: provider.id,
-          fingerprint: providerFingerprint(),
-          model: provider.model,
-          verifiedAt: new Date(0),
-        },
-        update: {
-          fingerprint: providerFingerprint(),
-          model: provider.model,
-          verifiedAt: new Date(0),
+      update: {
+        fingerprint: providerFingerprint(),
+        model: provider.model,
+        verifiedAt: new Date(0),
+      },
+    });
+    throw error;
+  }
+  await db.$transaction(async (tx) => {
+    const usageData = result.usage;
+    if (usageData)
+      await tx.usage.create({
+        data: {
+          userId,
+          provider: result.provider,
+          runId,
+          purpose,
+          model: result.model,
+          input: usageData.input_tokens,
+          cached: usageData.input_tokens_details?.cached_tokens ?? 0,
+          output: usageData.output_tokens,
+          reasoning: usageData.output_tokens_details?.reasoning_tokens ?? 0,
+          total: usageData.total_tokens,
         },
       });
-      throw error;
+    await tx.providerConnection.upsert({
+      where: { id: provider.id },
+      create: {
+        id: provider.id,
+        fingerprint: providerFingerprint(),
+        model: provider.model,
+        verifiedAt: result.failure ? new Date(0) : new Date(),
+      },
+      update: {
+        fingerprint: providerFingerprint(),
+        model: provider.model,
+        verifiedAt: result.failure ? new Date(0) : new Date(),
+      },
     });
+  });
+  if (runId) {
+    const run = await db.run.findFirst({
+      where: { id: runId, userId },
+      select: { tokenBudget: true },
+    });
+    if (run) {
+      const total = await db.usage.aggregate({
+        where: { userId, runId },
+        _sum: { total: true },
+      });
+      if ((total._sum.total ?? 0) > run.tokenBudget)
+        throw new HttpError(
+          429,
+          "This run reached its AI token budget; continue with a larger budget to retry.",
+        );
+    }
+  }
   if (result.failure) throw result.failure;
   if (conversation) conversation.calls = result.calls;
   if (result.calls.length > 1) {

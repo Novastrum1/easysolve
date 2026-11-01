@@ -732,6 +732,7 @@ export function RunsPage(c: Context) {
             "published",
             "completed",
             "planned",
+            "blocked",
             "failed",
             "cancelled",
           ].map((s) => (
@@ -841,7 +842,11 @@ export function RunPage(c: Context & { runId: string }) {
   const action = async () => {
     setBusy(true);
     try {
-      await c.act(`runs/${c.runId}/${confirm}`, { sha: run.headSha, feedback });
+      await c.act(`runs/${c.runId}/${confirm}`, {
+        sha: run.headSha,
+        feedback,
+        continueWithLargerBudget: run.status === "blocked",
+      });
       setRun(await request(`runs/${c.runId}`));
       setConfirm("");
     } catch {
@@ -866,15 +871,19 @@ export function RunPage(c: Context & { runId: string }) {
         actions={
           <>
             <Badge status={run.status} />
-            {["queued", "running", "awaiting_review", "failed"].includes(
-              run.status,
-            ) && (
+            {[
+              "queued",
+              "running",
+              "awaiting_review",
+              "blocked",
+              "failed",
+            ].includes(run.status) && (
               <Button variant="secondary" onClick={() => setConfirm("cancel")}>
                 <Square size={14} />
                 Cancel
               </Button>
             )}
-            {["failed", "cancelled"].includes(run.status) && (
+            {["failed", "cancelled", "blocked"].includes(run.status) && (
               <Button onClick={() => setConfirm("retry")}>
                 <RefreshCw size={15} />
                 Retry
@@ -924,6 +933,26 @@ export function RunPage(c: Context & { runId: string }) {
           <Zap size={15} />
           {(run.usage?._sum?.total ?? 0).toLocaleString()} tokens ·{" "}
           {run.usage?._count ?? 0} requests
+        </span>
+        <span>
+          <Clock size={15} />
+          Stage: {label(run.stage ?? run.status)} · queue{" "}
+          {run.queueWaitMs == null
+            ? "—"
+            : `${Math.round(run.queueWaitMs / 1000)}s`}{" "}
+          · execution{" "}
+          {run.executionMs == null
+            ? "—"
+            : `${Math.round(run.executionMs / 1000)}s`}
+        </span>
+        <span>
+          Stages: checkout {run.checkoutMs == null ? "—" : `${run.checkoutMs}ms`} · AI{" "}
+          {run.aiMs == null ? "—" : `${run.aiMs}ms`} · validation{" "}
+          {run.validationMs == null ? "—" : `${run.validationMs}ms`}
+        </span>
+        <span>
+          Budget: {run.executionBudgetSeconds}s · {run.toolRounds ?? 0}/
+          {run.maxToolRounds ?? "—"} rounds
         </span>
       </div>
       <div className="tabs">
@@ -1009,7 +1038,9 @@ export function RunPage(c: Context & { runId: string }) {
                 ? "The agent will inspect and rebuild the patch. The current approval will be cleared."
                 : confirm === "cancel"
                   ? "Pending work will stop. A running sandbox stops at its next checkpoint."
-                  : "Retry uses the same run and branch, preventing duplicate pull requests."}
+                  : run.status === "blocked"
+                    ? "This run reached its fast budget or was assessed as complex. Retry will continue with a larger server-enforced budget."
+                    : "Retry uses the same run and branch, preventing duplicate pull requests."}
           </p>
           {confirm === "changes" && (
             <Field label="Requested changes">
