@@ -451,6 +451,16 @@ export async function claimJob() {
              AND active_job.status = 'running'
              AND active_job."leaseUntil" > NOW()
          ) < ${accountLimit}
+       AND (
+         j."kind" <> 'run' OR NOT EXISTS (
+           SELECT 1
+           FROM "Job" earlier_run
+           WHERE earlier_run."userId" = j."userId"
+             AND earlier_run."kind" = 'run'
+             AND earlier_run.status IN ('queued', 'running')
+             AND earlier_run."createdAt" < j."createdAt"
+         )
+       )
        ORDER BY j."createdAt"
        FOR UPDATE OF j SKIP LOCKED
        LIMIT 1`;

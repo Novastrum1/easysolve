@@ -5,6 +5,7 @@ import { db } from "../lib/db";
 import { GithubRateLimitError, github } from "../lib/github";
 import { approveRun } from "../lib/queue";
 import { issueComplexity } from "../lib/policy";
+import { HttpError } from "../lib/security";
 import { Sandbox } from "./sandbox";
 const responseSchema = z.object({
   plan: z.string(),
@@ -452,7 +453,11 @@ export async function executeRun(userId: string, id: string) {
       await approveRun(userId, id, approvedSha);
     }
   } catch (e) {
-    if (e instanceof GithubRateLimitError) {
+    const aiRateLimited =
+      e instanceof HttpError &&
+      e.status === 429 &&
+      /Too many requests/i.test(e.message);
+    if (e instanceof GithubRateLimitError || aiRateLimited) {
       await releaseRun(id);
       await db.run.updateMany({
         where: { id, userId, status: "running" },

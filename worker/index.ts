@@ -14,6 +14,7 @@ import { settings } from "../lib/policy";
 import { claimJob, enqueue } from "../lib/queue";
 import { executeRun, publish } from "./agent";
 import { recordProviderRuntime } from "../lib/provider-runtime";
+import { HttpError } from "../lib/security";
 const workerId = process.env.WORKER_ID || "worker:" + process.pid;
 const workerVersion = process.env.RELEASE_VERSION || "unknown";
 async function heartbeat(activeJobs: number) {
@@ -160,6 +161,11 @@ async function processJob(job: Awaited<ReturnType<typeof claimJob>>) {
       return;
     const allowance = e instanceof AllowanceError;
     const githubLimited = e instanceof GithubRateLimitError;
+    const aiLimited =
+      job.kind === "run" &&
+      e instanceof HttpError &&
+      e.status === 429 &&
+      /Too many requests/i.test(e.message);
     const githubCredential = e instanceof GithubCredentialError;
     const retryableJob =
       !githubLimited &&
@@ -214,7 +220,7 @@ async function processJob(job: Awaited<ReturnType<typeof claimJob>>) {
       where: { id: job.id, status: "running", attempts: job.attempts },
       data: {
         status:
-          pauseRunForGithub || (!blockedRun && retryableJob)
+          pauseRunForGithub || aiLimited || (!blockedRun && retryableJob)
             ? "queued"
             : "failed",
         leaseUntil: null,
@@ -222,8 +228,10 @@ async function processJob(job: Awaited<ReturnType<typeof claimJob>>) {
           ? e.reset
           : githubLimited
             ? e.retryAt
+            : aiLimited
+              ? new Date(Date.now() + 60000)
             : new Date(Date.now() + job.attempts * 30000),
-        error: pauseRunForGithub
+        error: pauseRunForGithub || aiLimited
           ? e.message
           : allowance
             ? "Allowance exhausted"
@@ -243,7 +251,7 @@ async function processJob(job: Awaited<ReturnType<typeof claimJob>>) {
         },
         data: { status: "queued", error: "Waiting for allowance reset" },
       });
-    if (pauseRunForGithub)
+    if (pauseRunForGithub || aiLimited)
       await db.run.updateMany({
         where: {
           id: (job.payload as { runId: string }).runId,
@@ -256,7 +264,7 @@ async function processJob(job: Awaited<ReturnType<typeof claimJob>>) {
           error:
             e instanceof Error
               ? e.message.slice(0, 2000)
-              : "GitHub pacing paused",
+              : "Upstream pacing paused",
           lastProgressAt: new Date(),
         },
       });
