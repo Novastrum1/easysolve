@@ -2,7 +2,7 @@ import { releaseRun, reserveIssues } from "../entitlements";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "../db";
-import { approveRun, startRuns } from "../queue";
+import { approveRun, previewRuns, startRunsDetailed } from "../queue";
 import { HttpError } from "../security";
 import type { RouteContext } from "./types";
 const id = z.string().min(1).max(100);
@@ -17,10 +17,20 @@ export async function handleRuns({
 }: RouteContext) {
   const route = path.join("/");
   const method = request.method;
-  if (route === "runs" && method === "POST")
+  if (route === "runs" && method === "POST") {
+    const issueIds = z.array(id).min(1).max(40).parse(body.issueIds);
     return json(
-      await startRuns(u.id, z.array(id).min(1).max(40).parse(body.issueIds)),
+      await startRunsDetailed(u.id, issueIds, {
+        grouped: body.grouped === true,
+      }),
     );
+  }
+  if (route === "runs/preview" && method === "POST") {
+    const issueIds = z.array(id).min(1).max(40).parse(body.issueIds);
+    return json(
+      await previewRuns(u.id, issueIds, { grouped: body.grouped === true }),
+    );
+  }
   if (path[0] === "runs" && path[1]) {
     const run = await db.run.findFirst({
       where: { id: path[1], userId: u.id },

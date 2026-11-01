@@ -87,6 +87,15 @@ async function user(role: "USER" | "ADMIN" = "USER") {
     },
   });
   actors.push(u.id);
+  await db.identity.create({
+    data: {
+      id: "fixture",
+      userId: u.id,
+      login: "fixture",
+      githubAccountId: `fixture-${crypto.randomUUID()}`,
+      token: "fixture-token",
+    },
+  });
   return u.id;
 }
 async function login(id: string) {

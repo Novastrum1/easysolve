@@ -9,7 +9,7 @@ import {
   vi,
 } from "vitest";
 import { db } from "../lib/db";
-import { claimJob, enqueue, startRuns } from "../lib/queue";
+import { claimJob, enqueue, previewRuns, startRuns } from "../lib/queue";
 import { hash } from "../lib/security";
 import { executeRun, publish } from "../worker/agent";
 const { gh, model, sandbox } = vi.hoisted(() => ({
@@ -63,6 +63,15 @@ beforeAll(async () => {
       },
     })
   ).id;
+  await db.identity.create({
+    data: {
+      id: "test-identity",
+      userId,
+      login: "fixture",
+      githubAccountId: `fixture-${crypto.randomUUID()}`,
+      token: "fixture-token",
+    },
+  });
 });
 afterAll(async () => {
   await db.user.deleteMany({ where: { id: { in: [userId, otherId] } } });
@@ -105,14 +114,14 @@ describe("durable issue → run → approval → PR workflow", () => {
       startRuns(userId, [i.id]),
       startRuns(userId, [i.id]),
     ]);
-    expect(results.filter((r) => r.status === "fulfilled")).toHaveLength(1);
+    expect(results.filter((r) => r.status === "fulfilled")).toHaveLength(2);
     expect(
       await db.run.count({
         where: { userId, issueIds: { array_contains: [i.id] } },
       }),
     ).toBe(1);
   });
-  it("imports never enqueue runs and batches at most four per repository", async () => {
+  it("imports never enqueue runs and uses independent runs by default", async () => {
     const list = await Promise.all(
       Array.from({ length: 6 }, () => issue("test/batching")),
     );
@@ -125,7 +134,16 @@ describe("durable issue → run → approval → PR workflow", () => {
       userId,
       list.map((i) => i.id),
     );
-    expect(runs.map((r) => (r.issueIds as string[]).length).sort()).toEqual([
+    expect(runs).toHaveLength(6);
+    const groupedIssues = await Promise.all(
+      Array.from({ length: 6 }, () => issue("test/grouped")),
+    );
+    const grouped = await startRuns(
+      userId,
+      groupedIssues.map((i) => i.id),
+      { grouped: true },
+    );
+    expect(grouped.map((r) => (r.issueIds as string[]).length).sort()).toEqual([
       2, 4,
     ]);
   });
@@ -152,6 +170,29 @@ describe("durable issue → run → approval → PR workflow", () => {
       where: { id: job.id },
       data: { status: "completed" },
     });
+  });
+  it("previews bulk work without reserving allowance and skips unassigned issues", async () => {
+    const eligible = await issue("test/preview");
+    const skipped = await db.issue.create({
+      data: {
+        userId,
+        identityId: "test-identity",
+        repo: "test/preview",
+        number: ++serial,
+        title: "Not assigned",
+        assignees: ["someone-else"],
+        url: "https://github.com/test/preview/issues/2",
+      },
+    });
+    const before = await db.solveClaim.count({ where: { userId } });
+    const result = await previewRuns(userId, [eligible.id, skipped.id]);
+    expect(result.eligible.map((item) => item.id)).toEqual([eligible.id]);
+    expect(result.skipped).toEqual([
+      { id: skipped.id, reason: "GitHub identity @fixture is not assigned" },
+    ]);
+    expect(result.groups).toEqual([[eligible.id]]);
+    expect(result.estimated.tokens).toBeGreaterThan(0);
+    expect(await db.solveClaim.count({ where: { userId } })).toBe(before);
   });
   it("plan-only mode never starts a sandbox or writes to GitHub", async () => {
     const i = await issue();
@@ -306,9 +347,7 @@ describe("durable issue → run → approval → PR workflow", () => {
       where: { id: userId },
       data: { settings: { monthlyJobs: 9999 } },
     });
-    await expect(startRuns(userId, [i.id])).rejects.toThrow(
-      "Monthly job limit",
-    );
+    expect(await startRuns(userId, [i.id])).toEqual([]);
     if (before === undefined) delete process.env.PLAN_MAX_JOBS;
     else process.env.PLAN_MAX_JOBS = before;
     await db.user.update({ where: { id: userId }, data: { settings: {} } });

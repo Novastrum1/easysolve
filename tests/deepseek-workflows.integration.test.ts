@@ -85,6 +85,15 @@ beforeAll(async () => {
       },
     })
   ).id;
+  await db.identity.create({
+    data: {
+      id: "fixture",
+      userId,
+      login: "fixture",
+      githubAccountId: `fixture-${crypto.randomUUID()}`,
+      token: "fixture-token",
+    },
+  });
 });
 beforeEach(async () => {
   await db.rateLimit.deleteMany({ where: { key: `ai:${userId}` } });

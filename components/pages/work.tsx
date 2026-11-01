@@ -396,6 +396,8 @@ export function IssuesPage(c: Context) {
     [sort, setSort] = useState("newest"),
     [selected, setSelected] = useState<string[]>([]),
     [confirm, setConfirm] = useState(false),
+    [grouped, setGrouped] = useState(false),
+    [preview, setPreview] = useState<any>(null),
     [syncBusy, setSyncBusy] = useState(false),
     [busy, setBusy] = useState(false);
   const list = c.data.issues
@@ -421,13 +423,30 @@ export function IssuesPage(c: Context) {
         (sort === "oldest" ? 1 : -1) *
         (new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()),
     );
+  const openPreview = async (ids = selected, group = grouped) => {
+    setBusy(true);
+    try {
+      const result = await c.act("runs/preview", {
+        issueIds: ids,
+        grouped: group,
+      });
+      setPreview(result);
+      setConfirm(true);
+    } catch {
+    } finally {
+      setBusy(false);
+    }
+  };
   const solve = async () => {
     setBusy(true);
     try {
-      await c.act("runs", { issueIds: selected });
+      const result = await c.act("runs", { issueIds: selected, grouped });
       setSelected([]);
       setConfirm(false);
-      c.notify("Coding runs queued. Follow progress in Runs.");
+      setPreview(null);
+      c.notify(
+        `${result.runs.length} run${result.runs.length === 1 ? "" : "s"} queued${result.skipped?.length ? `; ${result.skipped.length} skipped` : ""}. Follow progress in Runs.`,
+      );
     } catch {
     } finally {
       setBusy(false);
@@ -461,7 +480,7 @@ export function IssuesPage(c: Context) {
             </Button>
             <Button
               disabled={!selected.length}
-              onClick={() => setConfirm(true)}
+              onClick={() => void openPreview()}
             >
               <Play size={15} />
               Solve selected{selected.length ? ` (${selected.length})` : ""}
@@ -504,6 +523,16 @@ export function IssuesPage(c: Context) {
             </span>
           </button>
         ))}
+      </div>
+      <div className="subtle-notice" aria-live="polite">
+        {selected.length
+          ? selected.length +
+            " issue" +
+            (selected.length === 1 ? "" : "s") +
+            " selected."
+          : "Select issues to preview a bulk solve."}{" "}
+        Select all applies only to the issues matching the current tab, search,
+        repository, account, PR, and ordering filters.
       </div>
       <div className="filters">
         <SearchBox
@@ -562,7 +591,7 @@ export function IssuesPage(c: Context) {
                   <th>
                     <input
                       type="checkbox"
-                      aria-label="Select all ready issues"
+                      aria-label="Select all matching eligible issues"
                       checked={
                         list.filter((i: any) =>
                           ["ready", "failed"].includes(i.status),
@@ -640,7 +669,7 @@ export function IssuesPage(c: Context) {
                         disabled={!["ready", "failed"].includes(i.status)}
                         onClick={() => {
                           setSelected([i.id]);
-                          setConfirm(true);
+                          void openPreview([i.id], false);
                         }}
                       >
                         <Play size={13} />
@@ -670,8 +699,51 @@ export function IssuesPage(c: Context) {
       {confirm && (
         <Modal title="Start coding runs?" onClose={() => setConfirm(false)}>
           <p>
-            {selected.length} issues will be grouped by repository, with up to
-            four issues per run. Each group gets one branch and pull request.
+            {preview?.eligible?.length ?? selected.length} issue
+            {(preview?.eligible?.length ?? selected.length) === 1
+              ? ""
+              : "s"}{" "}
+            will start as independent run
+            {(preview?.eligible?.length ?? selected.length) === 1 ? "" : "s"}.
+          </p>
+          <label className="check-row">
+            <input
+              type="checkbox"
+              checked={grouped}
+              onChange={(e) => {
+                const value = e.target.checked;
+                setGrouped(value);
+                void openPreview(selected, value);
+              }}
+            />
+            Group compatible issues from the same repository (maximum four)
+          </label>
+          {preview && (
+            <div className="subtle-notice" aria-live="polite">
+              <strong>Preview</strong>: {preview.eligible.length} eligible,{" "}
+              {preview.skipped.length} skipped; {preview.groups.length} worker
+              job{preview.groups.length === 1 ? "" : "s"}.
+              <br />
+              Repositories: {preview.repositories.join(", ") || "none"}; GitHub
+              identities:{" "}
+              {preview.identities
+                .map((login: string) => "@" + login)
+                .join(", ") || "none"}
+              ; estimated work: {preview.estimated.seconds}s /{" "}
+              {preview.estimated.tokens.toLocaleString()} tokens.
+              {preview.skipped.length > 0 && (
+                <ul>
+                  {preview.skipped.slice(0, 6).map((item: any) => (
+                    <li key={item.id}>{item.reason}</li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+          <p className="muted">
+            Importing and previewing do not consume solving allowance. The
+            selected issues, repositories, and GitHub identities are checked
+            again when you confirm.
           </p>
           <div className="subtle-notice">
             <ShieldCheck size={18} />
@@ -946,7 +1018,8 @@ export function RunPage(c: Context & { runId: string }) {
             : `${Math.round(run.executionMs / 1000)}s`}
         </span>
         <span>
-          Stages: checkout {run.checkoutMs == null ? "—" : `${run.checkoutMs}ms`} · AI{" "}
+          Stages: checkout{" "}
+          {run.checkoutMs == null ? "—" : `${run.checkoutMs}ms`} · AI{" "}
           {run.aiMs == null ? "—" : `${run.aiMs}ms`} · validation{" "}
           {run.validationMs == null ? "—" : `${run.validationMs}ms`}
         </span>
