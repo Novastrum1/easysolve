@@ -431,7 +431,9 @@ export async function claimJob() {
     );
     const accountLimit = Math.min(
       20,
-      Math.max(1, Number(process.env.WORKER_ACCOUNT_CONCURRENCY || 10)),
+    // One active job per account keeps shared AI/GitHub limits coordinated.
+    // Owners can raise this deliberately when their upstream limits allow it.
+    Math.max(1, Number(process.env.WORKER_ACCOUNT_CONCURRENCY || 1)),
     );
     const active = await tx.job.count({
       where: { status: "running", leaseUntil: { gt: new Date() } },
